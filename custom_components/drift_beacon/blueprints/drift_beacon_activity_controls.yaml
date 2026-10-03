@@ -1,0 +1,127 @@
+blueprint:
+  name: Drift Beacon Activity Controls
+  description: >
+    Map any Home Assistant trigger to actions on one Drift Beacon activity. Every mapping is
+    optional; add triggers only for the actions you use.
+
+    If a device emits overlapping events, such as a press followed by a double press, both
+    mapped actions may run. To stop or pause whatever session is live, use the Drift Beacon
+    Session Controls blueprint.
+
+    Triggers that contain templates (for example a template trigger, or a numeric state
+    trigger with a value template) are not supported here: routing a run to its mapping
+    renders every mapped trigger, and those templates fail outside their trigger. Put such
+    triggers in their own automation that calls the Drift Beacon action directly.
+  domain: automation
+  homeassistant:
+    min_version: "2026.9.0"
+  source_url: https://github.com/drift-beacon/ha-integration/blob/main/custom_components/drift_beacon/blueprints/drift_beacon_activity_controls.yaml
+
+  input:
+    activity:
+      name: Activity
+      description: The Drift Beacon activity these triggers control.
+      selector:
+        device:
+          filter:
+            - integration: drift_beacon
+              model: Activity
+
+    track_now:
+      name: Track now
+      icon: mdi:play-pause
+      description: >
+        Starting a timed activity ends your other live session. Marking a point activity leaves
+        a live session running.
+      input:
+        track_trigger:
+          name: Track activity
+          description: >
+            Timed activities start, or stop if you are already tracking them. Point activities
+            record one occurrence.
+          default: []
+          selector:
+            trigger:
+        pause_trigger:
+          name: Pause activity
+          description: >
+            End this activity's live session and pin it for later. Timed activities only; does
+            nothing when it is not live.
+          default: []
+          selector:
+            trigger:
+
+    plan_ahead:
+      name: Plan ahead
+      icon: mdi:playlist-plus
+      collapsed: true
+      description: Keep the activity ready or line it up. These actions do not start tracking.
+      input:
+        pin_trigger:
+          name: Pin activity
+          description: Make this your pinned activity. The previous pin moves to the front of your queue.
+          default: []
+          selector:
+            trigger:
+        queue_trigger:
+          name: Queue activity
+          description: >
+            Add this activity to the back of your queue. With auto-advance on and nothing pinned,
+            it is pinned instead. Each trigger adds another entry.
+          default: []
+          selector:
+            trigger:
+        unpin_trigger:
+          name: Unpin activity
+          description: >
+            Unpin this activity if it is pinned. With auto-advance on, the next queued activity
+            is pinned.
+          default: []
+          selector:
+            trigger:
+
+mode: queued
+max: 5
+max_exceeded: silent
+
+triggers:
+  - triggers: !input track_trigger
+  - triggers: !input pause_trigger
+  - triggers: !input pin_trigger
+  - triggers: !input queue_trigger
+  - triggers: !input unpin_trigger
+
+variables:
+  # Nested trigger lists are flattened and cannot carry ids, so each run finds its mapping
+  # from the flat trigger index. Empty groups contribute no positions.
+  trigger_groups:
+    - service: track_activity
+      triggers: !input track_trigger
+    - service: pause_activity
+      triggers: !input pause_trigger
+    - service: pin_activity
+      triggers: !input pin_trigger
+    - service: queue_activity
+      triggers: !input queue_trigger
+    - service: unpin_activity
+      triggers: !input unpin_trigger
+  service: >-
+    {%- set index = trigger.idx | int(-1) if trigger is defined else -1 -%}
+    {%- set found = namespace(offset=0, service='') -%}
+    {%- for group in trigger_groups -%}
+      {%- set count = group.triggers | length -%}
+      {%- if found.offset <= index < found.offset + count -%}
+        {%- set found.service = group.service -%}
+      {%- endif -%}
+      {%- set found.offset = found.offset + count -%}
+    {%- endfor -%}
+    {{ found.service }}
+
+conditions:
+  - condition: template
+    value_template: "{{ service != '' }}"
+
+actions:
+  - action: "{{ 'drift_beacon.' ~ service }}"
+    target:
+      device_id: !input activity

@@ -1,0 +1,64 @@
+blueprint:
+  name: Drift Beacon Session Controls
+  description: >
+    Map any Home Assistant trigger to stopping or pausing your live Drift Beacon session,
+    whichever activity it belongs to. Ending a shared session ends it for everyone in it.
+
+    Triggers that contain templates (for example a template trigger, or a numeric state
+    trigger with a value template) are not supported here: routing a run to its mapping
+    renders every mapped trigger, and those templates fail outside their trigger. Put such
+    triggers in their own automation that calls the Drift Beacon action directly.
+  domain: automation
+  homeassistant:
+    min_version: "2026.9.0"
+  source_url: https://github.com/drift-beacon/ha-integration/blob/main/custom_components/drift_beacon/blueprints/drift_beacon_session_controls.yaml
+
+  input:
+    workspace:
+      name: Workspace
+      description: The Drift Beacon workspace whose live session these triggers control.
+      selector:
+        device:
+          filter:
+            - integration: drift_beacon
+              model: Workspace
+    stop_trigger:
+      name: Stop session
+      description: End your live session.
+      default: []
+      selector:
+        trigger:
+    pause_trigger:
+      name: Pause session
+      description: >
+        End your live session and pin its activity to resume later. The previous pin moves to
+        the front of your queue.
+      default: []
+      selector:
+        trigger:
+
+mode: queued
+max: 5
+max_exceeded: silent
+
+triggers:
+  - triggers: !input stop_trigger
+  - triggers: !input pause_trigger
+
+variables:
+  stop_count: !input stop_trigger
+  service: >-
+    {%- set index = trigger.idx | int(-1) if trigger is defined else -1 -%}
+    {%- if index < 0 -%}
+    {%- elif index < stop_count | length -%}stop_session
+    {%- else -%}pause_session
+    {%- endif -%}
+
+conditions:
+  - condition: template
+    value_template: "{{ service != '' }}"
+
+actions:
+  - action: "{{ 'drift_beacon.' ~ service }}"
+    target:
+      device_id: !input workspace

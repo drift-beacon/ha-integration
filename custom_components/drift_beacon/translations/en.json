@@ -1,0 +1,197 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Drift Beacon",
+        "description": "Enter your Drift Beacon server and an access token. Create a token in the Drift Beacon web app under Settings → Access Tokens; it decides which workspace and user Home Assistant acts for.\n\n{detected}",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "verify_ssl": "Verify SSL certificate",
+          "api_token": "Access token"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of your Drift Beacon server.",
+          "port": "Port of the Drift Beacon server (default 9000).",
+          "verify_ssl": "Turn off for the Home Assistant add-on or another server with a self-signed certificate.",
+          "api_token": "A workspace access token from the Drift Beacon web app."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Drift Beacon",
+        "description": "The access token for {workspace} is no longer valid. Enter a new token for the same workspace and user ({user}).",
+        "data": {
+          "api_token": "Access token"
+        }
+      },
+      "reconfigure": {
+        "title": "Change Drift Beacon server",
+        "description": "Update where Home Assistant reaches your Drift Beacon server. The access token is kept.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of your Drift Beacon server.",
+          "port": "Port of the Drift Beacon server.",
+          "verify_ssl": "Turn off for the Home Assistant add-on or another server with a self-signed certificate."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "The access token was rejected, or it no longer grants access to its workspace.",
+      "invalid_server": "No Drift Beacon server answered at that address and port.",
+      "ssl_verification_failed": "The server's TLS certificate could not be verified. If it uses a self-signed certificate (like the add-on), turn off certificate verification.",
+      "workspace_not_found": "The token's workspace no longer exists on this server.",
+      "wrong_workspace": "This token belongs to a different workspace. Add that workspace as a new entry instead.",
+      "wrong_user": "This token belongs to a different user. Use a token for the same user, or add the workspace again.",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This workspace is already set up.",
+      "reauth_successful": "Re-authentication was successful",
+      "reconfigure_successful": "Re-configuration was successful",
+      "wrong_workspace": "The server at that address has a different workspace for this token."
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "session_started": "Tracking started",
+      "session_stopped": "Tracking stopped",
+      "marked": "Marked",
+      "pinned": "Pinned",
+      "unpinned": "Unpinned",
+      "schedule_triggered": "Schedule triggered"
+    }
+  },
+  "entity": {
+    "button": {
+      "mark": {
+        "name": "Mark"
+      },
+      "stop_session": {
+        "name": "Stop session"
+      }
+    },
+    "sensor": {
+      "progress": {
+        "name": "Progress"
+      },
+      "current_session": {
+        "name": "Current session"
+      },
+      "pinned_activity": {
+        "name": "Pinned activity"
+      },
+      "connected_user": {
+        "name": "Connected user"
+      }
+    },
+    "switch": {
+      "session": {
+        "name": "Session"
+      },
+      "pin": {
+        "name": "Pin"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "The Drift Beacon access token was rejected, or now belongs to a different workspace or user."
+    },
+    "workspace_not_found": {
+      "message": "The Drift Beacon workspace for this entry no longer exists."
+    },
+    "cannot_connect": {
+      "message": "Cannot connect to Drift Beacon: {error}"
+    },
+    "not_connected": {
+      "message": "Drift Beacon is not connected right now."
+    },
+    "action_failed": {
+      "message": "Drift Beacon rejected {action}: {message} ({reason})."
+    },
+    "devices_only": {
+      "message": "Drift Beacon actions only accept devices as targets. Choose an activity or workspace device."
+    },
+    "no_target": {
+      "message": "Choose at least one Drift Beacon device."
+    },
+    "not_drift_beacon_device": {
+      "message": "Device {device_id} is not a Drift Beacon device."
+    },
+    "workspace_not_loaded": {
+      "message": "The Drift Beacon workspace {workspace} is not loaded."
+    },
+    "not_activity_device": {
+      "message": "{device} is not a Drift Beacon activity."
+    },
+    "not_workspace_device": {
+      "message": "{device} is an activity. Choose its workspace device for this action."
+    },
+    "activity_unavailable": {
+      "message": "{device} is no longer an active Drift Beacon activity."
+    },
+    "some_targets_failed": {
+      "message": "Some targets failed: {failures}"
+    },
+    "plugin_command_rejected": {
+      "message": "{plugin} can't run {command}: {message} ({code})."
+    },
+    "plugin_command_failed": {
+      "message": "{plugin} {command} failed: {message} ({code})."
+    },
+    "plugin_command_may_have_run": {
+      "message": "{plugin} {command} may have run, but Drift Beacon couldn't confirm it: {message}"
+    },
+    "plugin_command_not_here": {
+      "message": "{workspace} doesn't offer {service}."
+    },
+    "plugin_command_one_workspace": {
+      "message": "Choose one workspace to get a response from {service}."
+    }
+  },
+  "issues": {
+    "legacy_entry": {
+      "title": "Re-add the Drift Beacon workspace {title}",
+      "description": "This version of Drift Beacon models each activity as its own device and cannot migrate entries created by earlier versions. Remove the {title} entry and add the workspace again."
+    },
+    "workspace_not_found": {
+      "title": "Drift Beacon workspace {title} not found",
+      "description": "The server no longer has the workspace for {title}. If it was deleted, remove this entry. Home Assistant keeps retrying in case it comes back."
+    }
+  },
+  "services": {
+    "track_activity": {
+      "name": "Track activity",
+      "description": "Timed activities start, or stop if you are already tracking them. Point activities record one occurrence."
+    },
+    "pause_activity": {
+      "name": "Pause activity",
+      "description": "End this timed activity's live session and pin it for later. Does nothing if it is not live."
+    },
+    "pin_activity": {
+      "name": "Pin activity",
+      "description": "Make this your pinned activity. The previous pin moves to the front of your queue."
+    },
+    "unpin_activity": {
+      "name": "Unpin activity",
+      "description": "Unpin this activity if it is pinned. With auto-advance on, the next queued activity is pinned."
+    },
+    "queue_activity": {
+      "name": "Queue activity",
+      "description": "Add this activity to the back of your queue. With auto-advance on and nothing pinned, it is pinned instead. Each call adds another entry."
+    },
+    "stop_session": {
+      "name": "Stop session",
+      "description": "Stop your live session in this workspace, whichever activity it belongs to. Ending a shared session ends it for everyone in it."
+    },
+    "pause_session": {
+      "name": "Pause session",
+      "description": "End your live session in this workspace and pin its activity to resume later."
+    }
+  }
+}

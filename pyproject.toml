@@ -1,0 +1,12 @@
+# Development tooling only; the integration itself is installed by copying custom_components.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components", "tests"]
+known-third-party = ["homeassistant", "pytest_homeassistant_custom_component"]

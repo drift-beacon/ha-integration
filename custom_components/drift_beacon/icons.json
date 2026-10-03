@@ -1,0 +1,63 @@
+{
+  "entity": {
+    "button": {
+      "mark": {
+        "default": "mdi:plus-circle-outline"
+      },
+      "stop_session": {
+        "default": "mdi:stop-circle-outline"
+      }
+    },
+    "sensor": {
+      "progress": {
+        "default": "mdi:progress-clock"
+      },
+      "current_session": {
+        "default": "mdi:timer-outline"
+      },
+      "pinned_activity": {
+        "default": "mdi:pin-outline"
+      },
+      "connected_user": {
+        "default": "mdi:account-circle-outline"
+      }
+    },
+    "switch": {
+      "session": {
+        "default": "mdi:timer-off-outline",
+        "state": {
+          "on": "mdi:timer-outline"
+        }
+      },
+      "pin": {
+        "default": "mdi:pin-off-outline",
+        "state": {
+          "on": "mdi:pin"
+        }
+      }
+    }
+  },
+  "services": {
+    "track_activity": {
+      "service": "mdi:play-pause"
+    },
+    "pause_activity": {
+      "service": "mdi:pause-circle-outline"
+    },
+    "pin_activity": {
+      "service": "mdi:pin"
+    },
+    "unpin_activity": {
+      "service": "mdi:pin-off"
+    },
+    "queue_activity": {
+      "service": "mdi:playlist-plus"
+    },
+    "stop_session": {
+      "service": "mdi:stop-circle-outline"
+    },
+    "pause_session": {
+      "service": "mdi:pause-circle-outline"
+    }
+  }
+}

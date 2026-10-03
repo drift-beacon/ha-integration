@@ -1,0 +1,28 @@
+# Targets are devices only: entities are hidden, and Home Assistant skips hidden entities
+# when it expands a device, so the integration resolves activity devices itself.
+track_activity: &activity_service
+  target:
+    device:
+      integration: drift_beacon
+      model: Activity
+
+pause_activity:
+  target:
+    device:
+      integration: drift_beacon
+      model: Activity
+      model_id: span
+
+pin_activity: *activity_service
+
+unpin_activity: *activity_service
+
+queue_activity: *activity_service
+
+stop_session: &workspace_service
+  target:
+    device:
+      integration: drift_beacon
+      model: Workspace
+
+pause_session: *workspace_service

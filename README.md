@@ -20,7 +20,10 @@ Then add it under Settings → Devices & services, with the hub's address and an
   - _Mark_ button (point activities): records one occurrence.
   - _Pin_ switch: on while it is your pinned activity.
   - _Progress_ sensor: completed time or mark count for the activity's progress period,
-    across all workspace members; the running session is not included.
+    across all workspace members; the running session is not included. Its `goal_type`
+    (`duration` or `count`), `goal_progress` and `goal_target` attributes give the goal in
+    its own unit, so a timed activity whose goal is a number of sessions reports sessions
+    there. `target` is the goal in the unit of the state, and is absent for such an activity.
 
 Every entity is **hidden**, so hundreds of activities never appear on auto-generated
 dashboards. Devices still show under Settings → Devices. Unhide an entity to use it on a

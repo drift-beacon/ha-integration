@@ -137,6 +137,67 @@ async def test_progress_sensors(
     assert water.attributes["color"] == [51, 102, 153]
 
 
+async def test_progress_sensor_reports_a_goal_in_its_own_unit(
+    hass: HomeAssistant, setup_integration: MockConfigEntry, server: FakeDriftBeacon
+) -> None:
+    """A goal in sessions is reported in sessions; the state stays time and has no target."""
+    await server.push(
+        {
+            "_tag": "ActivityUpdated",
+            "activity": activity(
+                "reading",
+                "Reading",
+                progress={"current": 5400, "target": None},
+                goal={"type": "count", "count": 3},
+                goalProgress={"current": 2, "target": 3},
+            ),
+        },
+        {
+            "_tag": "ActivityUpdated",
+            "activity": activity(
+                "water",
+                "Water",
+                "point",
+                progress={"current": 3, "target": 8},
+                goal={"type": "count", "count": 8},
+                goalProgress={"current": 3, "target": 8},
+            ),
+        },
+    )
+    await wait_for(lambda: hass.states.get("sensor.water_progress").state == "3.0")
+    reading = hass.states.get("sensor.reading_progress")
+    assert float(reading.state) == pytest.approx(1.5, abs=0.01)
+    assert "target" not in reading.attributes
+    assert reading.attributes["goal_type"] == "count"
+    assert reading.attributes["goal_progress"] == 2
+    assert reading.attributes["goal_target"] == 3
+    water = hass.states.get("sensor.water_progress")
+    assert water.attributes["goal_type"] == "count"
+    assert water.attributes["goal_target"] == 8
+
+
+async def test_progress_sensor_without_goal_fields(
+    hass: HomeAssistant, setup_integration: MockConfigEntry, server: FakeDriftBeacon
+) -> None:
+    """A server from before the goal fields leaves the goal attributes out."""
+    await server.push(
+        {
+            "_tag": "ActivityUpdated",
+            "activity": activity(
+                "reading", "Reading", progress={"current": 60, "target": 7200}
+            ),
+        }
+    )
+    await wait_for(
+        lambda: (
+            hass.states.get("sensor.reading_progress").attributes.get("target") == 7200
+        )
+    )
+    reading = hass.states.get("sensor.reading_progress")
+    assert "goal_type" not in reading.attributes
+    assert "goal_progress" not in reading.attributes
+
+
 async def test_updates_only_rewrite_affected_entities(
     hass: HomeAssistant, setup_integration: MockConfigEntry, server: FakeDriftBeacon
 ) -> None:

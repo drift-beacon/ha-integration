@@ -17,6 +17,9 @@ from .const import (
     ATTR_CATEGORY_NAME,
     ATTR_COLOR,
     ATTR_DESCRIPTION,
+    ATTR_GOAL_PROGRESS,
+    ATTR_GOAL_TARGET,
+    ATTR_GOAL_TYPE,
     ATTR_MEMBER_IDS,
     ATTR_PINNED_AT,
     ATTR_SESSION_ID,
@@ -75,7 +78,9 @@ class ProgressSensor(ActivityEntity, SensorEntity):
     """Progress for the activity's progress period, across all workspace members.
 
     Timed activities report completed-session time (the running session is not included);
-    point activities report their mark count. No ``state_class``: long-term statistics for
+    point activities report their mark count. ``goal_progress`` and ``goal_target`` are in the
+    unit of ``goal_type``, so a timed activity whose goal is a number of sessions reports
+    sessions there while the state stays time. No ``state_class``: long-term statistics for
     every activity are not worth their cost.
     """
 
@@ -124,6 +129,9 @@ class ProgressSensor(ActivityEntity, SensorEntity):
         return compact(
             {
                 ATTR_TARGET: activity.target,
+                ATTR_GOAL_TYPE: activity.goal_type,
+                ATTR_GOAL_PROGRESS: activity.goal_progress,
+                ATTR_GOAL_TARGET: activity.goal_target,
                 ATTR_ACTIVITY_ID: activity.id,
                 ATTR_TRACKING_TYPE: activity.tracking_type,
                 ATTR_COLOR: activity.color,

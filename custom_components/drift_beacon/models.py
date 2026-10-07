@@ -47,12 +47,22 @@ class Activity:
     unit: str | None
     # Completed-session seconds (span) or mark count (point) for the progress period.
     progress: float
+    # The goal in the unit of ``progress``; None with no goal and for a timed activity whose
+    # goal is a number of sessions.
     target: float | None
+    # "duration" or "count" (marks, or sessions for a timed activity); None with no goal, and
+    # from a server older than the field.
+    goal_type: str | None = None
+    # Progress and goal in the unit of ``goal_type``: seconds, or completed marks or sessions.
+    goal_progress: float | None = None
+    goal_target: float | None = None
 
     @classmethod
     def from_wire(cls, data: dict[str, Any]) -> Activity:
         """Parse an ``IntegrationActivityData`` record."""
         progress = data.get("progress") or {}
+        goal = data.get("goal") or {}
+        goal_progress = data.get("goalProgress") or {}
         tracking_type = data.get("trackingType")
         return cls(
             id=data["id"],
@@ -65,6 +75,9 @@ class Activity:
             unit=data.get("unit"),
             progress=float(progress.get("current") or 0),
             target=progress.get("target"),
+            goal_type=goal.get("type"),
+            goal_progress=goal_progress.get("current"),
+            goal_target=goal_progress.get("target"),
         )
 
 

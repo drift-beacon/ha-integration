@@ -57,6 +57,9 @@ async def async_get_device_diagnostics(
             "tracking_type": activity.tracking_type,
             "progress": activity.progress,
             "target": activity.target,
+            "goal_type": activity.goal_type,
+            "goal_progress": activity.goal_progress,
+            "goal_target": activity.goal_target,
             "has_category": activity.category_id is not None,
         },
         "is_live": bool(

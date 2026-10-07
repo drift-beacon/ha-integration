@@ -1,13 +1,9 @@
 blueprint:
   name: Drift Beacon Session Controls
-  description: >
-    Map any Home Assistant trigger to stopping or pausing your live Drift Beacon session,
-    whichever activity it belongs to. Ending a shared session ends it for everyone in it.
+  description: |
+    Stop or pause your live Drift Beacon session from any trigger, whichever activity is live. Ending a shared session ends it for everyone.
 
-    Triggers that contain templates (for example a template trigger, or a numeric state
-    trigger with a value template) are not supported here: routing a run to its mapping
-    renders every mapped trigger, and those templates fail outside their trigger. Put such
-    triggers in their own automation that calls the Drift Beacon action directly.
+    Triggers that use templates are not supported. Put those in their own automation that calls the Drift Beacon action.
   domain: automation
   homeassistant:
     min_version: "2026.9.0"

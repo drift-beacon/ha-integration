@@ -1,17 +1,9 @@
 blueprint:
   name: Drift Beacon Activity Controls
-  description: >
-    Map any Home Assistant trigger to actions on one Drift Beacon activity. Every mapping is
-    optional; add triggers only for the actions you use.
+  description: |
+    Control one Drift Beacon activity from any trigger: track, pause, pin, queue or unpin. Leave an action empty to skip it.
 
-    If a device emits overlapping events, such as a press followed by a double press, both
-    mapped actions may run. To stop or pause whatever session is live, use the Drift Beacon
-    Session Controls blueprint.
-
-    Triggers that contain templates (for example a template trigger, or a numeric state
-    trigger with a value template) are not supported here: routing a run to its mapping
-    renders every mapped trigger, and those templates fail outside their trigger. Put such
-    triggers in their own automation that calls the Drift Beacon action directly.
+    Triggers that use templates are not supported. Put those in their own automation that calls the Drift Beacon action.
   domain: automation
   homeassistant:
     min_version: "2026.9.0"

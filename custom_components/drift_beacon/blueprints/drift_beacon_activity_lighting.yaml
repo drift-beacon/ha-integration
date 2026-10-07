@@ -1,9 +1,11 @@
 blueprint:
   name: Drift Beacon Activity Lighting
-  description: >
-    Colour lights after what you are doing in Drift Beacon: bright in the activity's colour
-    while a session is live, dim in the pinned activity's colour when something is pinned, and
-    off otherwise. Resyncs when Home Assistant starts and after reconnecting.
+  description: |
+    Colour lights to match what you are doing in Drift Beacon.
+
+    - Session live: bright, in the activity's colour
+    - Activity pinned: dim, in the pinned activity's colour
+    - Otherwise: off
   domain: automation
   homeassistant:
     min_version: "2026.9.0"

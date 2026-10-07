@@ -123,16 +123,30 @@ activity, as it happens:
 
 ## Blueprints
 
-- **Drift Beacon Activity Controls** (`drift_beacon_activity_controls.yaml`): pick an activity
-  device, then map any triggers to Track, Pause, Pin, Queue and Unpin.
-- **Drift Beacon Session Controls** (`drift_beacon_session_controls.yaml`): pick the workspace
-  device, then map triggers to Stop or Pause your live session.
-  Both controls blueprints work out which mapping fired from the trigger's position, which
-  renders every mapped trigger. Triggers containing templates (template triggers, numeric
-  state value templates) fail there, so put those in their own automation that calls the
-  action directly.
-- **Drift Beacon Activity Lighting** (`drift_beacon_activity_lighting.yaml`): colours lights
-  from `drift_beacon_focus_changed` for the chosen workspace.
+Click a button to import the blueprint into your Home Assistant.
+
+- **Drift Beacon Activity Controls**: pick an activity device, then map any triggers to Track,
+  Pause, Pin, Queue and Unpin.
+
+  [![Import Activity Controls blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdrift-beacon%2Fha-integration%2Fblob%2Fmain%2Fcustom_components%2Fdrift_beacon%2Fblueprints%2Fdrift_beacon_activity_controls.yaml)
+
+- **Drift Beacon Session Controls**: pick the workspace device, then map triggers to Stop or
+  Pause your live session, whichever activity it belongs to.
+
+  [![Import Session Controls blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdrift-beacon%2Fha-integration%2Fblob%2Fmain%2Fcustom_components%2Fdrift_beacon%2Fblueprints%2Fdrift_beacon_session_controls.yaml)
+
+- **Drift Beacon Activity Lighting**: colours lights from `drift_beacon_focus_changed` for the
+  chosen workspace. It resyncs when Home Assistant starts and after reconnecting.
+
+  [![Import Activity Lighting blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdrift-beacon%2Fha-integration%2Fblob%2Fmain%2Fcustom_components%2Fdrift_beacon%2Fblueprints%2Fdrift_beacon_activity_lighting.yaml)
+
+Both controls blueprints work out which mapping fired from the trigger's position, which
+renders every mapped trigger. Triggers containing templates (template triggers, numeric
+state value templates) fail there, so put those in their own automation that calls the
+action directly.
+
+If a device emits overlapping events, such as a press followed by a double press, both mapped
+actions may run.
 
 ## Connection
 

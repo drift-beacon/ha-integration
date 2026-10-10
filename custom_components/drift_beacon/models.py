@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from collections import Counter
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
@@ -203,30 +204,67 @@ def _text(value: Any, what: str) -> str:
     return value
 
 
-def same_value(a: ControlScalar | None, b: ControlScalar | None) -> bool:
-    """Whether two values are the same with their type: the number 3 is not the text "3"."""
+def _value(value: Any, what: str) -> ControlScalar | bool:
+    """A control's value as sent: a string, a number or, for a toggle, a boolean."""
+    if not isinstance(value, (str, int, float)):
+        raise TypeError(f"{what} is not a string, a number or a boolean")
+    return value
+
+
+def _number(value: Any, what: str) -> float:
+    """A finite number as sent; a boolean is none."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{what} is not a number")
+    if not math.isfinite(value):
+        raise ValueError(f"{what} is not finite")
+    return value
+
+
+def same_value(a: ControlScalar | None, b: ControlScalar | bool | None) -> bool:
+    """Whether two values are the same with their type: the number 3 is not the text "3".
+
+    A boolean is no option's value: Python would take True for the number 1.
+    """
     if a is None or b is None:
         return a is b
+    if isinstance(a, bool) or isinstance(b, bool):
+        return False
     return isinstance(a, str) == isinstance(b, str) and a == b
+
+
+CONTROL_KINDS: frozenset[str] = frozenset({"select", "toggle", "range", "trigger"})
 
 
 @dataclass(frozen=True, slots=True)
 class PluginControl:
-    """One select control of a plugin, as the server's catalogue lists it."""
+    """One control of a plugin, as the server's catalogue lists it.
+
+    Four kinds. A ``select`` is one option of a choices list, a ``toggle`` a boolean and a
+    ``range`` a number between two ends: each is set by running ``command`` with ``field``
+    holding the value. A ``trigger`` has no value: ``command`` is run with no input.
+    """
 
     plugin: str
     plugin_name: str
     control: str
+    kind: str
     title: str
     icon: str | None
-    # How to set it: this command, with this one field holding an option's value.
     command: str
-    field: str
-    # The name of the list its options come from, in the plugin's values.
-    choices: str
-    # Whether null is one of its options, and the plugin's wording for it.
-    nullable: bool
-    none: str | None
+    # The one input field that takes the value; None for a trigger.
+    field: str | None = None
+    # A select's: the name of the list its options come from, in the plugin's values,
+    choices: str | None = None
+    # whether null is one of its options, and the plugin's wording for it.
+    nullable: bool = False
+    none: str | None = None
+    # A range's: its two ends, whether it takes whole numbers only, and, when the plugin says,
+    # how far one step moves it and what it counts.
+    min: float | None = None
+    max: float | None = None
+    integer: bool = False
+    step: float | None = None
+    unit: str | None = None
 
     @property
     def key(self) -> str:
@@ -236,20 +274,45 @@ class PluginControl:
     @classmethod
     def from_wire(cls, raw: dict[str, Any]) -> PluginControl | None:
         """Build from a catalogue entry; None for a kind this integration doesn't know."""
-        if raw.get("kind") != "select":
+        kind = raw.get("kind")
+        if kind not in CONTROL_KINDS:
             return None
-        icon, none = raw.get("icon"), raw.get("none")
-        nullable = raw.get("nullable")
-        if not isinstance(nullable, bool):
-            raise TypeError("nullable is not a boolean")
-        return cls(
+        icon = raw.get("icon")
+        control = cls(
             plugin=_text(raw["plugin"], "plugin"),
             plugin_name=_text(raw.get("pluginName") or raw["plugin"], "pluginName"),
             control=_text(raw["control"], "control"),
+            kind=kind,
             title=_text(raw.get("title") or raw["control"], "title"),
             icon=icon if isinstance(icon, str) else None,
             command=_text(raw["command"], "command"),
-            field=_text(raw["field"], "field"),
+        )
+        if kind == "trigger":
+            return control
+        control = replace(control, field=_text(raw["field"], "field"))
+        if kind == "toggle":
+            return control
+        if kind == "range":
+            low, high = _number(raw["min"], "min"), _number(raw["max"], "max")
+            if not low < high:
+                raise ValueError("min is not below max")
+            step, unit = raw.get("step"), raw.get("unit")
+            if step is not None and not _number(step, "step") > 0:
+                raise ValueError("step is not above 0")
+            return replace(
+                control,
+                min=low,
+                max=high,
+                integer=raw.get("integer") is True,
+                step=step,
+                unit=unit if isinstance(unit, str) and unit else None,
+            )
+        none = raw.get("none")
+        nullable = raw.get("nullable")
+        if not isinstance(nullable, bool):
+            raise TypeError("nullable is not a boolean")
+        return replace(
+            control,
             choices=_text(raw["choices"], "choices"),
             nullable=nullable,
             none=none if nullable and isinstance(none, str) and none else None,
@@ -277,9 +340,12 @@ class PluginOption:
 
 @dataclass(frozen=True, slots=True)
 class ControlValue:
-    """A control's current value, wrapped: a value of None is known, and means nothing is selected."""
+    """A control's current value, wrapped: a value of None is known, and means nothing is selected.
 
-    value: ControlScalar | None
+    A select's is text or a number, a toggle's a boolean and a range's a number.
+    """
+
+    value: ControlScalar | bool | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,7 +380,7 @@ class PluginEntry:
                 continue
             value = held["value"]
             controls[name] = ControlValue(
-                None if value is None else _scalar(value, "value")
+                None if value is None else _value(value, "value")
             )
         return cls(
             plugin=_text(raw["plugin"], "plugin"),
@@ -325,7 +391,7 @@ class PluginEntry:
 
 
 def parse_plugin_controls(listed: Any) -> tuple[PluginControl, ...]:
-    """The select controls of a ``PluginControls`` message, in its order.
+    """The controls of a ``PluginControls`` message whose kind is known, in its order.
 
     A malformed entry is left out with a warning, so one bad control doesn't cost the rest.
     """
@@ -476,7 +542,7 @@ def control_view(
     none_name = (
         _cut(control.none or default_none, STATE_LIMIT) if control.nullable else None
     )
-    listed = entry.choices.get(control.choices) if entry else None
+    listed = entry.choices.get(control.choices or "") if entry else None
     value = entry.controls.get(control.control) if entry else None
     names = shown_labels(listed or (), none_name)
     options: tuple[tuple[str, ControlScalar | None], ...] = tuple(

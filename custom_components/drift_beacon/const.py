@@ -7,7 +7,13 @@ from homeassistant.const import Platform
 DOMAIN: Final = "drift_beacon"
 MANUFACTURER: Final = "Drift Beacon"
 
-PLATFORMS: Final = [Platform.BUTTON, Platform.SELECT, Platform.SENSOR, Platform.SWITCH]
+PLATFORMS: Final = [
+    Platform.BUTTON,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 # Config entry data
 CONF_API_TOKEN: Final = "api_token"

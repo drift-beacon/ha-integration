@@ -1,4 +1,4 @@
-"""Session and Pin switches on each activity device."""
+"""Session and Pin switches on each activity device, and a switch per toggle a plugin declares."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from .const import ATTR_MEMBER_IDS, ATTR_PINNED_AT, ATTR_SESSION_ID, ATTR_STARTE
 from .coordinator import DriftBeaconConfigEntry
 from .entity import ActivityEntity, async_setup_activity_entities, compact
 from .models import LiveSession, PinnedActivity
+from .plugin_control import PluginControlEntity, async_setup_plugin_controls
 
 PARALLEL_UPDATES = 0
 
@@ -30,6 +31,9 @@ async def async_setup_entry(
             SessionSwitch.role: (lambda a: a.tracking_type == "span", SessionSwitch),
             PinSwitch.role: (lambda a: True, PinSwitch),
         },
+    )
+    async_setup_plugin_controls(
+        hass, entry, async_add_entities, "toggle", PluginControlSwitch
     )
 
 
@@ -108,3 +112,21 @@ class PinSwitch(ActivityEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Unpin this activity; with auto-advance on, the queue head is pinned next."""
         await self.coordinator.async_unpin(self.activity_id)
+
+
+class PluginControlSwitch(PluginControlEntity, SwitchEntity):
+    """One toggle control of a plugin: on, off, or unknown while the plugin hasn't said."""
+
+    @property
+    def is_on(self) -> bool | None:
+        """The control's value; None while it is unknown or isn't a boolean."""
+        held = self._value
+        return held.value if held and isinstance(held.value, bool) else None
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Run the control's command with true."""
+        await self._async_set(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Run the control's command with false."""
+        await self._async_set(False)

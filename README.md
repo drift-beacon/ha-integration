@@ -13,7 +13,7 @@ Then add it under Settings → Devices & services, with the hub's address and an
 ## Devices
 
 - **Workspace device** (model `Workspace`): _Current session_ and _Pinned activity_ sensors,
-  _Connected user_ (diagnostic), a _Stop session_ button, and a select for each
+  _Connected user_ (diagnostic), a _Stop session_ button, and an entity for each
   [plugin control](#plugin-controls).
 - **One device per activity** (model `Activity`, model id `span` or `point`), linked to the
   workspace device:
@@ -26,7 +26,7 @@ Then add it under Settings → Devices & services, with the hub's address and an
     its own unit, so a timed activity whose goal is a number of sessions reports sessions
     there. `target` is the goal in the unit of the state, and is absent for such an activity.
 
-Every entity but a plugin control's select is **hidden**, so hundreds of activities never
+Every entity but a plugin control's is **hidden**, so hundreds of activities never
 appear on auto-generated dashboards. Devices still show under Settings → Devices. Unhide an
 entity to use it on a dashboard.
 
@@ -120,6 +120,21 @@ plugin and the control (_Magic Cube Preset_), and visible by default.
   it there if it won't.
 - Needs a Drift Beacon server that sends `PluginControls` and `PluginValues`; older servers
   offer none.
+
+A plugin can declare three other kinds of control, each an entity on the workspace device,
+named and shown the same way:
+
+- A **toggle** is a **switch**. Turning it on or off runs the control's command with the
+  value wanted.
+- A **range** is a **number**, a slider between the two ends the plugin's command takes, in
+  the plugin's step and unit. Without a step it moves by 1 for whole numbers, and by a
+  hundredth of the range otherwise.
+- A **trigger** is a **button** that runs the control's command.
+
+Like the select, a switch and a number change when the plugin has made the change, and are
+**unknown** while it hasn't published the value. All three are **unavailable** while the
+plugin isn't running, and leave Home Assistant, with their name and area kept, when it is
+disabled. They need a Drift Beacon server that offers these kinds; an older one lists none.
 
 ## Triggers and events
 

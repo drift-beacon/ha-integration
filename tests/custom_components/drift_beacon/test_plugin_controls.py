@@ -117,7 +117,7 @@ def test_the_catalogue_keeps_select_controls_and_leaves_out_what_it_cannot_read(
     controls = parse_plugin_controls(
         [
             PRESET,
-            {**PRESET, "control": "speed", "kind": "range"},
+            {**PRESET, "control": "speed", "kind": "dial"},
             {**PRESET, "control": "broken", "nullable": "yes"},
             {"kind": "select"},
             "nonsense",
@@ -181,7 +181,7 @@ def test_values_keep_unknown_empty_and_null_apart(
             {
                 "plugin": "worse",
                 "status": "running",
-                "controls": {"a": {"value": True}},
+                "controls": {"a": {"value": [True]}},
             },
             {"status": "running"},
         ]

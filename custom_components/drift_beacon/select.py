@@ -32,7 +32,7 @@ async def async_setup_entry(
 ) -> None:
     """Keep one select per select control in the workspace's catalogue."""
     async_setup_plugin_controls(
-        hass, entry, async_add_entities, "select", PluginControlSelect
+        hass, entry, async_add_entities, "select", "select", PluginControlSelect
     )
 
 

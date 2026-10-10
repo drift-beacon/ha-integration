@@ -15,12 +15,18 @@ from functools import partial
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import ATTR_CONTROL, ATTR_PLUGIN
+from .const import ATTR_CONTROL, ATTR_PLUGIN, DOMAIN
 from .coordinator import DriftBeaconConfigEntry, DriftBeaconCoordinator
 from .entity import DriftBeaconEntity
 from .models import ControlValue, PluginControl, PluginEntry
+
+
+def control_unique_id(workspace_id: str, key: str) -> str:
+    """A control's unique id, the same on whichever platform its kind puts it."""
+    return f"{workspace_id}:control:{key}"
 
 
 class PluginControlEntity(DriftBeaconEntity):
@@ -39,7 +45,7 @@ class PluginControlEntity(DriftBeaconEntity):
         """Bind to one control, by its plugin and name."""
         super().__init__(coordinator)
         self._key = control.key
-        self._attr_unique_id = f"{coordinator.workspace_id}:control:{control.key}"
+        self._attr_unique_id = control_unique_id(coordinator.workspace_id, control.key)
         self._attr_device_info = coordinator.devices.workspace_device_info
         self._control = control
         self._listed = True
@@ -138,16 +144,20 @@ def async_setup_plugin_controls[E: PluginControlEntity](
     hass: HomeAssistant,
     entry: DriftBeaconConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
+    platform: str,
     kind: str,
     make: Callable[[DriftBeaconCoordinator, PluginControl], E],
 ) -> None:
-    """Keep one entity per control of ``kind`` in the workspace's catalogue.
+    """Keep one entity per control of ``kind`` in the workspace's catalogue, on ``platform``.
 
     A control that leaves the catalogue (its plugin was disabled or uninstalled) takes its
     entity out of Home Assistant but keeps its registry entry, so its name, area and entity id
-    are there when it returns. Nothing changes while the catalogue is unknown.
+    are there when it returns. One the catalogue now lists as another kind will not return
+    here: its entity is on another platform, and its registry entry on this one is removed.
+    Nothing changes while the catalogue is unknown.
     """
     coordinator = entry.runtime_data
+    registry = er.async_get(hass)
     entities: dict[str, E] = {}
     # Entities on their way out, by control: one that returns waits for its removal.
     removing: dict[str, asyncio.Task[None]] = {}
@@ -184,6 +194,18 @@ def async_setup_plugin_controls[E: PluginControlEntity](
             new.append(entities[key])
         if new:
             async_add_entities(new)
+        # What is left of a control that changed kind, from this run or one before: an entry
+        # on this platform that Home Assistant would show as no longer provided, for good.
+        for control in controls:
+            if control.kind == kind or control.key in removing:
+                continue
+            stale = registry.async_get_entity_id(
+                platform,
+                DOMAIN,
+                control_unique_id(coordinator.workspace_id, control.key),
+            )
+            if stale is not None:
+                registry.async_remove(stale)
 
     @callback
     def unload() -> None:

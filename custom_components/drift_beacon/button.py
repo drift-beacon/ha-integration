@@ -26,7 +26,7 @@ async def async_setup_entry(
         {MarkButton.role: (lambda a: a.tracking_type == "point", MarkButton)},
     )
     async_setup_plugin_controls(
-        hass, entry, async_add_entities, "trigger", PluginControlButton
+        hass, entry, async_add_entities, "button", "trigger", PluginControlButton
     )
 
 

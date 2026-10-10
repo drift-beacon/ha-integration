@@ -415,8 +415,10 @@ async def test_a_control_that_changes_kind_changes_platform(
     server: FakeDriftBeacon,
     with_lamp: None,
     setup_integration: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """One name, another kind: the old entity leaves and one of the new kind takes the control."""
+    """One name, another kind: one of the new kind takes the control, and nothing is left of the old."""
+    registry = er.async_get(hass)
     as_trigger = {
         **BLINK,
         "control": "power",
@@ -425,9 +427,54 @@ async def test_a_control_that_changes_kind_changes_platform(
     }
     await server.push_plugin_controls([as_trigger, LEVEL, BLINK])
     await wait_for(lambda: hass.states.get("button.home_lamp_power") is not None)
-    await wait_for(lambda: state_of(hass, SWITCH).attributes.get("restored") is True)
+    # It will not come back as a switch, so its entry there is not kept as one that may.
+    await wait_for(lambda: registry.async_get(SWITCH) is None)
+    assert hass.states.get(SWITCH) is None
     server.results["RunPluginCommand"] = {"_tag": "Ok"}
     await call(hass, "button", "press", "button.home_lamp_power")
     assert server.calls_to("RunPluginCommand") == [
         {"plugin": "lamp", "command": "togglePower", "input": {}}
     ]
+    # The others, and a control that only left, are as they were: an entry kept for its return.
+    assert state_of(hass, NUMBER).state == "40"
+    await server.push_plugin_controls([as_trigger, BLINK])
+    await wait_for(lambda: state_of(hass, NUMBER).attributes.get("restored") is True)
+    assert registry.async_get(NUMBER) is not None
+
+    # And back: a switch again, with the button's entry gone in its turn.
+    await server.push_plugin_controls([POWER, BLINK])
+    await wait_for(lambda: hass.states.get(SWITCH) is not None)
+    await wait_for(lambda: registry.async_get("button.home_lamp_power") is None)
+    assert state_of(hass, SWITCH).state == "on"
+    assert "does not generate unique IDs" not in caplog.text
+    assert "ERROR" not in caplog.text
+
+
+async def test_an_entry_left_by_a_kind_changed_before_a_restart_is_removed(
+    hass: HomeAssistant,
+    server: FakeDriftBeacon,
+    with_lamp: None,
+    config_entry: MockConfigEntry,
+) -> None:
+    """Home Assistant was off while the kind changed: the old platform's entry goes at setup."""
+    registry = er.async_get(hass)
+    config_entry.add_to_hass(hass)
+    unique = f"{WORKSPACE_ID}:control:lamp/power"
+    old = registry.async_get_or_create(
+        "select", "drift_beacon", unique, config_entry=config_entry
+    )
+    # Another control's entry on that platform, which the catalogue doesn't list at all, stays.
+    gone = registry.async_get_or_create(
+        "select",
+        "drift_beacon",
+        f"{WORKSPACE_ID}:control:lamp/scene",
+        config_entry=config_entry,
+    )
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    await wait_for(lambda: hass.states.get(SWITCH) is not None)
+    assert registry.async_get(old.entity_id) is None
+    assert registry.async_get(gone.entity_id) is not None
+    assert registry.async_get(SWITCH) is not None
+    await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.async_block_till_done()

@@ -22,7 +22,7 @@ async def async_setup_entry(
 ) -> None:
     """Keep one number per range control in the workspace's catalogue."""
     async_setup_plugin_controls(
-        hass, entry, async_add_entities, "range", PluginControlNumber
+        hass, entry, async_add_entities, "number", "range", PluginControlNumber
     )
 
 

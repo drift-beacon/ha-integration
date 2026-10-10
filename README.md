@@ -134,7 +134,8 @@ named and shown the same way:
 Like the select, a switch and a number change when the plugin has made the change, and are
 **unknown** while it hasn't published the value. All three are **unavailable** while the
 plugin isn't running, and leave Home Assistant, with their name and area kept, when it is
-disabled. They need a Drift Beacon server that offers these kinds; an older one lists none.
+disabled. A control its plugin turns into another kind (a switch that becomes a button, say)
+is a new entity, and the old one is removed for good, its name and area with it. They need a Drift Beacon server that offers these kinds; an older one lists none.
 
 ## Triggers and events
 

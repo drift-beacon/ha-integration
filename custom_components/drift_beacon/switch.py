@@ -33,7 +33,7 @@ async def async_setup_entry(
         },
     )
     async_setup_plugin_controls(
-        hass, entry, async_add_entities, "toggle", PluginControlSwitch
+        hass, entry, async_add_entities, "switch", "toggle", PluginControlSwitch
     )
 
 

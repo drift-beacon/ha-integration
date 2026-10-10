@@ -203,6 +203,200 @@ def test_fields_get_selectors_home_assistant_accepts() -> None:
 # ----------------------------------------------------------------------
 
 
+def test_options_and_formats_get_selectors_that_say_more() -> None:
+    """Labelled options are a dropdown of labels, a colour a picker, a duration a number in ms."""
+    fields = describe_fields(
+        {
+            "type": "object",
+            "properties": {
+                "shape": {
+                    "type": "string",
+                    "options": [
+                        {"value": "round", "label": "Round", "detail": "No corners"},
+                        {"value": "square", "label": "Square"},
+                    ],
+                },
+                "size": {
+                    "type": ["integer", "null"],
+                    "options": [
+                        {"value": 1, "label": "Small"},
+                        {"value": 2, "label": "Large"},
+                        {"value": None, "label": "Any size"},
+                    ],
+                },
+                "tint": {"type": ["string", "null"], "format": "color"},
+                "wait": {
+                    "type": "integer",
+                    "format": "duration-ms",
+                    "minimum": 0,
+                    "maximum": 60000,
+                },
+                "pause": {"type": ["integer", "null"], "format": "duration-ms"},
+                "odd": {"type": "string", "options": "round"},
+            },
+        }
+    )
+    assert {key: field["selector"] for key, field in fields.items()} == {
+        "shape": {
+            "select": {
+                "options": [
+                    {"value": "round", "label": "Round"},
+                    {"value": "square", "label": "Square"},
+                ]
+            }
+        },
+        # A select holds text, and nothing for null.
+        "size": {
+            "select": {
+                "options": [
+                    {"value": "1", "label": "Small"},
+                    {"value": "2", "label": "Large"},
+                ]
+            }
+        },
+        "tint": {"color_rgb": {}},
+        # The field's own bounds, which Home Assistant's duration selector has no place for.
+        # A box, not the slider a bounded integer gets: nobody lands on one millisecond in 60,000.
+        "wait": {
+            "number": {
+                "unit_of_measurement": "ms",
+                "min": 0,
+                "max": 60000,
+                "step": 1,
+                "mode": "box",
+            }
+        },
+        "pause": {"number": {"unit_of_measurement": "ms", "step": 1, "mode": "box"}},
+        "odd": {"text": {}},
+    }
+    for field in fields.values():
+        selector.validate_selector(field["selector"])
+
+
+def test_a_default_is_given_as_its_selector_holds_it() -> None:
+    """A number option's default is the select's text, and a colour's its red, green and blue."""
+    fields = describe_fields(
+        {
+            "type": "object",
+            "properties": {
+                "size": {
+                    "type": ["integer", "null"],
+                    "default": 2,
+                    "options": [
+                        {"value": 2, "label": "Large"},
+                        {"value": None, "label": "Any"},
+                    ],
+                },
+                "any": {
+                    "type": ["integer", "null"],
+                    "default": None,
+                    "options": [{"value": 2, "label": "Large"}],
+                },
+                "shape": {
+                    "type": "string",
+                    "default": "round",
+                    "options": [{"value": "round", "label": "Round"}],
+                },
+                "tint": {"type": "string", "format": "color", "default": "#FFcc00"},
+                "wait": {"type": "integer", "format": "duration-ms", "default": 1500},
+                "note": {"type": "string", "default": "#ffcc00"},
+            },
+        }
+    )
+    assert {key: field["default"] for key, field in fields.items()} == {
+        "size": "2",
+        "any": None,
+        "shape": "round",
+        "tint": [255, 204, 0],
+        "wait": 1500,
+        "note": "#ffcc00",
+    }
+    # And back again, as the field takes it.
+    command = PluginCommand.from_wire(
+        {
+            "plugin": "tp",
+            "command": "fill",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "size": {
+                        "type": "integer",
+                        "options": [{"value": 2, "label": "L"}],
+                    },
+                    "tint": {"type": "string", "format": "color"},
+                },
+            },
+        }
+    )
+    assert command_input({"size": "2", "tint": [255, 204, 0]}, command) == {
+        "size": 2,
+        "tint": "#ffcc00",
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "sent"),
+    [
+        # What the select held as text is the number the option is.
+        ("size", "2", 2),
+        ("size", 2, 2),
+        ("size", None, None),
+        # A label, or anything else: as typed, for the server to take or refuse.
+        ("size", "Large", "Large"),
+        ("size", "3", "3"),
+        ("shape", "round", "round"),
+        ("ratio", "0.5", 0.5),
+        # A colour selector's red, green and blue.
+        ("tint", [255, 204, 0], "#ffcc00"),
+        ("tint", (0, 0, 0), "#000000"),
+        ("tint", "#FFcc00", "#FFcc00"),
+        ("tint", [255, 204], [255, 204]),
+        ("tint", [256, 0, 0], [256, 0, 0]),
+        ("tint", [True, 0, 0], [True, 0, 0]),
+        ("wait", 1500, 1500),
+        # Only a field that says it is a colour.
+        ("tags", [1, 2, 3], [1, 2, 3]),
+    ],
+)
+def test_what_a_selector_holds_is_sent_as_the_field_takes_it(
+    field: str, value: Any, sent: Any
+) -> None:
+    """A number option comes back from text, and a colour from red, green and blue."""
+    command = PluginCommand.from_wire(
+        {
+            "plugin": "tp",
+            "command": "fill",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "shape": {
+                        "type": "string",
+                        "options": [{"value": "round", "label": "Round"}],
+                    },
+                    "size": {
+                        "type": ["integer", "null"],
+                        "options": [
+                            {"value": 1, "label": "Small"},
+                            {"value": 2, "label": "Large"},
+                            {"value": None, "label": "Any size"},
+                        ],
+                    },
+                    "ratio": {
+                        "type": "number",
+                        "options": [{"value": 0.5, "label": "Half"}],
+                    },
+                    "tint": {"type": "string", "format": "color"},
+                    "wait": {"type": "integer", "format": "duration-ms"},
+                    "tags": {"type": "array", "items": {"type": "integer"}},
+                },
+            },
+        }
+    )
+    result = command_input({field: value}, command)
+    assert result == {field: sent}
+    assert type(result[field]) is type(sent)
+
+
 async def test_services_come_with_the_first_snapshot(
     hass: HomeAssistant,
     server: FakeDriftBeacon,

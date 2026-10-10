@@ -78,30 +78,86 @@ def _types(schema: Mapping[str, Any]) -> list[str]:
     return [k for k in kinds if k != "null"]
 
 
+def _option_text(value: Any) -> str | None:
+    """An option's value as a select holds it: text as it is, a number as its digits.
+
+    None for null, which a select can't hold: YAML can still send it.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return json.dumps(value)
+    return None
+
+
+def _labelled(schema: Mapping[str, Any]) -> list[tuple[str, str, Any]]:
+    """A field's declared ``options`` as (text, label, value), without null."""
+    options = schema.get("options")
+    if not isinstance(options, list):
+        return []
+    found = []
+    for option in options:
+        if not isinstance(option, Mapping):
+            continue
+        text = _option_text(option.get("value"))
+        if text is not None:
+            found.append((text, str(option.get("label") or text), option["value"]))
+    return found
+
+
 def field_selector(schema: Mapping[str, Any]) -> dict[str, Any]:
     """The selector for one input property; ``object`` (YAML) for anything else."""
+    labelled = _labelled(schema)
+    if labelled:
+        return {
+            "select": {
+                "options": [
+                    {"value": text, "label": label} for text, label, _ in labelled
+                ]
+            }
+        }
     enum = schema.get("enum")
     options = [v for v in enum if v is not None] if isinstance(enum, list) else []
     if options and all(isinstance(v, str) for v in options):
         return {"select": {"options": options}}
     kinds = _types(schema)
     kind = kinds[0] if len(kinds) == 1 else None
+    if kind == "string" and schema.get("format") == "color":
+        return {"color_rgb": {}}
     if kind in ("integer", "number"):
         low, high = schema.get("minimum"), schema.get("maximum")
         number: dict[str, Any] = {}
+        # A duration is a number of milliseconds here, not Home Assistant's duration
+        # selector, which has no bounds: this keeps the field's own, and its slider.
+        if schema.get("format") == "duration-ms":
+            number["unit_of_measurement"] = "ms"
         if low is not None:
             number["min"] = low
         if high is not None:
             number["max"] = high
         number["step"] = 1 if kind == "integer" else "any"
         bounded = kind == "integer" and low is not None and high is not None
-        number["mode"] = "slider" if bounded else "box"
+        # A slider over milliseconds has a step nobody can land on: a box keeps the bounds.
+        slider = bounded and "unit_of_measurement" not in number
+        number["mode"] = "slider" if slider else "box"
         return {"number": number}
     if kind == "boolean":
         return {"boolean": {}}
     if kind == "string":
         return {"text": {}}
     return {"object": {}}
+
+
+def _default_held(schema: Mapping[str, Any], held: Mapping[str, Any]) -> Any:
+    """A field's default as its selector holds it, which ``command_input`` turns back."""
+    default = schema["default"]
+    if "select" in held and _labelled(schema):
+        text = _option_text(default)
+        return default if text is None else text
+    is_hex = isinstance(default, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", default)
+    if "color_rgb" in held and is_hex:
+        return [int(default[i : i + 2], 16) for i in (1, 3, 5)]
+    return default
 
 
 def describe_fields(schema: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -115,9 +171,9 @@ def describe_fields(schema: Mapping[str, Any] | None) -> dict[str, Any]:
         if prop.get("description"):
             field["description"] = prop["description"]
         field["required"] = key in required
-        if "default" in prop:
-            field["default"] = prop["default"]
         field["selector"] = field_selector(prop)
+        if "default" in prop:
+            field["default"] = _default_held(prop, field["selector"])
         fields[key] = field
     return fields
 
@@ -156,17 +212,39 @@ def _fits(value: Any, kinds: list[str]) -> bool:
     return isinstance(value, float) and "number" in kinds
 
 
+def _is_rgb(value: Any) -> bool:
+    return (
+        isinstance(value, list | tuple)
+        and len(value) == 3
+        and all(
+            isinstance(part, int) and not isinstance(part, bool) and 0 <= part <= 255
+            for part in value
+        )
+    )
+
+
 def command_input(data: Mapping[str, Any], command: PluginCommand) -> dict[str, Any]:
     """The call's fields as the command's input; the server checks them.
 
     A number or boolean given to a text field (from a template or bare YAML) is sent as text.
+    What a selector holds differently from the field is turned back: a number among a
+    field's options, which a select holds as text, and a colour, which its selector gives
+    as red, green and blue.
     """
     properties = (command.input or {}).get("properties") or {}
     values: dict[str, Any] = {}
     for key, value in data.items():
         if key in RESERVED_FIELDS:
             continue
-        kinds = _types(properties.get(key) or {})
+        prop = properties.get(key) or {}
+        kinds = _types(prop)
+        if isinstance(value, str):
+            for text, _, option in _labelled(prop):
+                if text == value and not isinstance(option, str):
+                    value = option
+                    break
+        elif prop.get("format") == "color" and _is_rgb(value):
+            value = "#{:02x}{:02x}{:02x}".format(*value)
         if (
             "string" in kinds
             and isinstance(value, int | float)

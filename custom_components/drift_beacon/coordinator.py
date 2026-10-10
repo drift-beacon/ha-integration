@@ -67,8 +67,10 @@ REMEMBERED_OCCURRENCES = 256
 REJECTED_CODES = frozenset(
     {"invalid", "not-found", "not-installed", "disabled", "incompatible"}
 )
-# The command may have run: say so, so nobody runs it twice by mistake.
-MAY_HAVE_RUN_CODES = frozenset({"timeout", "stopped"})
+# Nobody knows whether the command ran: say so, so nobody runs it twice by mistake. Not
+# `failed`: its handler ran and threw, which is known, and is said as a failure. Whoever
+# shows a value treats all three alike: any of them may have changed it.
+UNCONFIRMED_CODES = frozenset({"timeout", "stopped"})
 
 
 def workspace_issue_id(entry_id: str) -> str:
@@ -542,7 +544,7 @@ class DriftBeaconCoordinator(DataUpdateCoordinator[WorkspaceState]):
         failure = answer if isinstance(answer, dict) else {}
         code = str(failure.get("code") or "failed")
         message = str(failure.get("message") or "no explanation")
-        if code in MAY_HAVE_RUN_CODES:
+        if code in UNCONFIRMED_CODES:
             raise may_have_run(message)
         placeholders = {**names, "code": code, "message": message}
         if code in REJECTED_CODES:

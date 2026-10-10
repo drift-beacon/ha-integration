@@ -483,10 +483,11 @@ async def test_a_call_needs_a_workspace_device(
 
 REJECTED = ["invalid", "not-found", "not-installed", "disabled", "incompatible"]
 FAILED = ["unavailable", "unsupported", "loop", "failed", "brand-new"]
-MAY_HAVE_RUN = ["timeout", "stopped"]
+# Whether it ran is unknown. `failed` is among FAILED: it ran, and that is known.
+UNCONFIRMED = ["timeout", "stopped"]
 
 
-@pytest.mark.parametrize("code", REJECTED + FAILED + MAY_HAVE_RUN)
+@pytest.mark.parametrize("code", REJECTED + FAILED + UNCONFIRMED)
 async def test_failures_say_what_happened(
     hass: HomeAssistant,
     server: FakeDriftBeacon,
@@ -507,7 +508,7 @@ async def test_failures_say_what_happened(
         f"magic-cube can't run reset: It said no ({code})"
         if code in REJECTED
         else "magic-cube reset may have run, but Drift Beacon couldn't confirm it: It said no"
-        if code in MAY_HAVE_RUN
+        if code in UNCONFIRMED
         else f"magic-cube reset failed: It said no ({code})"
     )
 

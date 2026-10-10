@@ -126,6 +126,10 @@ class FakeDriftBeacon:
         self.errors: dict[str, str] = {}
         # Sent after the Snapshot, in its chunk, to clients that ask for plugin commands.
         self.plugin_commands: list[dict[str, Any]] | None = None
+        # Sent after those, to clients that ask for plugin controls: the catalogue, then the
+        # values. None: the server doesn't know them yet, and sends neither.
+        self.plugin_controls: list[dict[str, Any]] | None = None
+        self.plugin_values: list[dict[str, Any]] | None = None
         # Sent last in the Snapshot's chunk: what happened just as the client subscribed.
         self.after_snapshot: list[dict[str, Any]] = []
         self.subscribers: dict[web.WebSocketResponse, int] = {}
@@ -196,6 +200,21 @@ class FakeDriftBeacon:
                         "commands": copy.deepcopy(self.plugin_commands),
                     }
                 )
+            if params.get("pluginControls") is True:
+                if self.plugin_controls is not None:
+                    first.append(
+                        {
+                            "_tag": "PluginControls",
+                            "controls": copy.deepcopy(self.plugin_controls),
+                        }
+                    )
+                if self.plugin_values is not None:
+                    first.append(
+                        {
+                            "_tag": "PluginValues",
+                            "plugins": copy.deepcopy(self.plugin_values),
+                        }
+                    )
             if params.get("scheduleEvents") is True:
                 self._schedule_listeners.add(ws)
             first.extend(self._messages_for(ws, copy.deepcopy(self.after_snapshot)))
@@ -249,6 +268,16 @@ class FakeDriftBeacon:
         """Change the plugin commands, and send them to every subscriber."""
         self.plugin_commands = commands
         await self.push({"_tag": "PluginCommands", "commands": copy.deepcopy(commands)})
+
+    async def push_plugin_controls(self, controls: list[dict[str, Any]]) -> None:
+        """Change the catalogue of plugin controls, and send it to every subscriber."""
+        self.plugin_controls = controls
+        await self.push({"_tag": "PluginControls", "controls": copy.deepcopy(controls)})
+
+    async def push_plugin_values(self, plugins: list[dict[str, Any]]) -> None:
+        """Change every plugin's values, and send them to every subscriber."""
+        self.plugin_values = plugins
+        await self.push({"_tag": "PluginValues", "plugins": copy.deepcopy(plugins)})
 
     def _messages_for(
         self, ws: web.WebSocketResponse, messages: list[dict[str, Any]]

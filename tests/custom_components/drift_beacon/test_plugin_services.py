@@ -211,7 +211,7 @@ async def test_services_come_with_the_first_snapshot(
 ) -> None:
     """The integration asks for plugin commands and registers them while the entry sets up."""
     assert server.calls_to("Subscribe") == [
-        {"pluginCommands": True, "scheduleEvents": True}
+        {"pluginCommands": True, "scheduleEvents": True, "pluginControls": True}
     ]
     assert hass.services.has_service(DOMAIN, SELECT)
     assert hass.services.supports_response(DOMAIN, SELECT) is SupportsResponse.OPTIONAL

@@ -22,13 +22,14 @@ plugin). Add `-k <name>` to select tests, or a file path to run one module.
 
 | File | Covers |
 | --- | --- |
-| `conftest.py` | `FakeDriftBeacon` server (plugin commands, schedule events only for subscribers that ask, answers that come late or never), config entry and setup fixtures (`make_entry` for more workspaces), `wait_for` |
+| `conftest.py` | `FakeDriftBeacon` server (plugin commands, plugin controls and their values, schedule events only for subscribers that ask, answers that come late or never), config entry and setup fixtures (`make_entry` for more workspaces), `wait_for` |
 | `test_models.py` | State reducer, marks and schedule triggers carried for the coordinator, colour parsing |
 | `test_init.py` | Setup errors, device model, hidden entities, unload, legacy entries, device deletion |
 | `test_coordinator.py` | Events, focus, schedule events (once per occurrence, none from a reconnect), reconnect diffs, grace period, malformed input, device rename/type change/removal |
 | `test_entities.py` | Switch, button and sensor state and actions, error propagation, write-on-change |
 | `test_services.py` | Device-target resolution and rejection, per-service RPCs, multi-target failures |
 | `test_plugin_services.py` | Plugin commands as actions: names, fields and selectors, registration from the first chunk, list changes, reconnects, calls, errors, several workspaces, stored lists |
+| `test_plugin_controls.py` | Plugin controls as selects: parsing (unknown, empty and null kept apart; a malformed entry left out), unique labels, options and the current one, choosing an option (the value with its type, null for the null wording), errors, unavailable against unknown, writes only on change, a control that leaves and returns (across chunks, at once, with a removal that takes a while, around an unload, and one the user disabled), a new and a renamed control, nothing before the catalogue, reconnects, several workspaces, diagnostics |
 | `test_config_flow.py` | User, reauth and reconfigure flows |
 | `test_device_trigger.py` | Device triggers, diagnostics redaction |
 | `test_blueprints.py` | Blueprint schemas; each blueprint run as a real automation |

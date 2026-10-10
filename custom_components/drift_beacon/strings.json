@@ -152,6 +152,9 @@
     },
     "plugin_command_one_workspace": {
       "message": "Choose one workspace to get a response from {service}."
+    },
+    "plugin_control_no_option": {
+      "message": "{control} has no option {option}."
     }
   },
   "issues": {

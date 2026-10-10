@@ -216,13 +216,18 @@ class DriftBeaconClient:
             self._pending.pop(request_id, None)
 
     async def subscribe(
-        self, *, plugin_commands: bool = False, schedule_events: bool = False
+        self,
+        *,
+        plugin_commands: bool = False,
+        schedule_events: bool = False,
+        plugin_controls: bool = False,
     ) -> AsyncIterator[list[dict[str, Any]]]:
         """Subscribe and yield each chunk (a list of messages); the first holds the Snapshot.
 
-        With ``plugin_commands``, the server also sends ``PluginCommands`` messages, and with
-        ``schedule_events``, ``ScheduleTriggered`` messages (servers from before either ignore
-        the request).
+        With ``plugin_commands``, the server also sends ``PluginCommands`` messages, with
+        ``schedule_events``, ``ScheduleTriggered`` messages, and with ``plugin_controls``,
+        ``PluginControls`` and ``PluginValues`` (servers from before any of them ignore the
+        request).
         """
         request_id = self._allocate_id()
         self._subscription_id = request_id
@@ -231,6 +236,8 @@ class DriftBeaconClient:
             params["pluginCommands"] = True
         if schedule_events:
             params["scheduleEvents"] = True
+        if plugin_controls:
+            params["pluginControls"] = True
         await self._send("Subscribe", params, request_id)
         while True:
             item = await self._chunks.get()

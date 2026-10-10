@@ -13,7 +13,8 @@ Then add it under Settings → Devices & services, with the hub's address and an
 ## Devices
 
 - **Workspace device** (model `Workspace`): _Current session_ and _Pinned activity_ sensors,
-  _Connected user_ (diagnostic), and a _Stop session_ button.
+  _Connected user_ (diagnostic), a _Stop session_ button, and a select for each
+  [plugin control](#plugin-controls).
 - **One device per activity** (model `Activity`, model id `span` or `point`), linked to the
   workspace device:
   - _Session_ switch (timed activities): on while you are tracking it.
@@ -25,9 +26,9 @@ Then add it under Settings → Devices & services, with the hub's address and an
     its own unit, so a timed activity whose goal is a number of sessions reports sessions
     there. `target` is the goal in the unit of the state, and is absent for such an activity.
 
-Every entity is **hidden**, so hundreds of activities never appear on auto-generated
-dashboards. Devices still show under Settings → Devices. Unhide an entity to use it on a
-dashboard.
+Every entity but a plugin control's select is **hidden**, so hundreds of activities never
+appear on auto-generated dashboards. Devices still show under Settings → Devices. Unhide an
+entity to use it on a dashboard.
 
 Archiving or deleting an activity removes its device. If the activity comes back, its device
 returns with the same id, so action targets keep working; automations that use the device's
@@ -81,6 +82,44 @@ response_variable: result
   has a field Home Assistant keeps for targets (`entity_id`, `device_id`, `area_id`,
   `floor_id`, `label_id`, `metadata`); the log says which. Needs a Drift Beacon server with
   the `RunPluginCommand` RPC and `PluginCommands` messages; older servers offer none.
+
+- A field that takes one of a list the plugin publishes (a preset, say) accepts the option's
+  name as well as its id: Drift Beacon looks the name up, ignoring case, while the plugin
+  runs and has published its list. A name no option has, or two have, reaches the plugin as
+  typed. Needs a Drift Beacon server that has this rule; an older one passes every name on, and
+  the plugin decides.
+
+### Plugin controls
+
+A plugin can declare a control: a current value and the command that sets it, such as
+magic-cube's active preset. Each one is a **select** on the workspace device, named after the
+plugin and the control (_Magic Cube Preset_), and visible by default.
+
+- Its options are that workspace's own, by name, in the plugin's order, followed by the
+  plugin's wording for "none" (_No preset_) when the control can be cleared. The state is the
+  current option. The `value` attribute is the id behind it, with `plugin` and `control`.
+- Choosing an option runs the control's command with that option's id. The state changes when
+  the plugin has made the change, wherever it was made from, so a choice the plugin refuses
+  raises an error and leaves the state as it was.
+- **Automations store the option's name.** Renaming a preset in Drift Beacon breaks an
+  automation that chose it by its old name. Use the plugin's action with the id (the `value`
+  attribute) where that matters.
+- Two options with one name are told apart by the detail the plugin gives (_Focus (duel)_),
+  or by their ids. So adding a second preset with an existing name changes what the first is
+  called here, which also breaks an automation that stored it.
+- An option's name is at most 255 characters, the longest state Home Assistant holds: a longer
+  name or detail is cut. An option whose id alone is longer is not offered here; the plugin's
+  action still takes it.
+- The select is **unavailable** while its plugin starts, has failed, is updating or waits for
+  setup, and while Drift Beacon can't be reached. It is **unknown** while the plugin hasn't
+  published the value or the list, and when the value is one the list doesn't hold. Just after
+  Drift Beacon restarts it can show the value from before for a moment. Until the
+  list is known, the only option is the wording for "none", on a control that has one.
+- When the plugin is disabled or removed, its select leaves Home Assistant and is listed as no
+  longer provided, with its name, area and entity id kept for when the plugin returns. Delete
+  it there if it won't.
+- Needs a Drift Beacon server that sends `PluginControls` and `PluginValues`; older servers
+  offer none.
 
 ## Triggers and events
 

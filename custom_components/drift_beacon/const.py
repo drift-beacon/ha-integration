@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 DOMAIN: Final = "drift_beacon"
 MANUFACTURER: Final = "Drift Beacon"
 
-PLATFORMS: Final = [Platform.BUTTON, Platform.SENSOR, Platform.SWITCH]
+PLATFORMS: Final = [Platform.BUTTON, Platform.SELECT, Platform.SENSOR, Platform.SWITCH]
 
 # Config entry data
 CONF_API_TOKEN: Final = "api_token"
@@ -104,3 +104,10 @@ FOCUS_IDLE: Final = "idle"
 # Server error reasons (IntegrationWsError.reason) handled specially
 REASON_NO_LIVE_SESSION: Final = "NoLiveSession"
 REASON_NOT_PINNED: Final = "NotPinned"
+
+# Plugin controls
+# What a nullable control's null option is called when its plugin gives no wording.
+DEFAULT_NONE_OPTION: Final = "None"
+ATTR_VALUE: Final = "value"
+ATTR_PLUGIN: Final = "plugin"
+ATTR_CONTROL: Final = "control"

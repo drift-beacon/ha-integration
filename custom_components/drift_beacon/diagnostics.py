@@ -38,6 +38,26 @@ async def async_get_config_entry_diagnostics(
             "categories": len(state.categories) if state else 0,
             "live_session": state.live_session is not None if state else None,
             "pinned": state.pinned is not None if state else None,
+            # Which controls the plugins declare, and whether each plugin runs. No labels and
+            # no values: they are the user's own names for things.
+            "plugin_controls": None
+            if state is None or state.plugin_controls is None
+            else sorted(control.key for control in state.plugin_controls),
+            "plugin_values": None
+            if state is None or state.plugin_values is None
+            else {
+                plugin: {
+                    "status": entry.status,
+                    "lists": {
+                        name: None if listed is None else len(listed)
+                        for name, listed in entry.choices.items()
+                    },
+                    "controls_known": sum(
+                        held is not None for held in entry.controls.values()
+                    ),
+                }
+                for plugin, entry in state.plugin_values.items()
+            },
         },
     }
 

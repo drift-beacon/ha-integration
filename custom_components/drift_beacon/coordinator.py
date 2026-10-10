@@ -179,7 +179,9 @@ class DriftBeaconCoordinator(DataUpdateCoordinator[WorkspaceState]):
         client = self._new_client()
         try:
             await client.connect()
-            stream = client.subscribe(plugin_commands=True, schedule_events=True)
+            stream = client.subscribe(
+                plugin_commands=True, schedule_events=True, plugin_controls=True
+            )
             async with asyncio.timeout(REQUEST_TIMEOUT):
                 first = await anext(stream)
             if not first or first[0].get("_tag") != "Snapshot":
@@ -317,7 +319,16 @@ class DriftBeaconCoordinator(DataUpdateCoordinator[WorkspaceState]):
             try:
                 if msg.get("_tag") == "Snapshot":
                     self._check_identity(msg)
+                    held = state
                     state = WorkspaceState.from_snapshot(msg)
+                    if held is not None:
+                        # A Snapshot says nothing of plugin controls: what was held of them
+                        # stays until the server's next message of each kind replaces it.
+                        state = replace(
+                            state,
+                            plugin_controls=held.plugin_controls,
+                            plugin_values=held.plugin_values,
+                        )
                     full = True
                 elif msg.get("_tag") == "PluginCommands":
                     listed = msg["commands"]

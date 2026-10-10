@@ -422,6 +422,44 @@ def test_a_control_resolves_against_its_plugins_values() -> None:
 # ----------------------------------------------------------------------
 
 
+def test_a_select_over_a_fixed_set_reads_like_any_other() -> None:
+    """The hub tells a field's declared options as a list of the control's own; nothing differs."""
+    wire = {
+        "plugin": "tp-contract",
+        "pluginName": "TP Contract",
+        "control": "hue",
+        "kind": "select",
+        "title": "Hue",
+        "icon": "mdi:palette",
+        "command": "setTone",
+        "field": "to",
+        # A name no manifest can declare: it is only ever a key to look the options up by.
+        "choices": "control:hue",
+        "nullable": True,
+        "none": "No tone",
+    }
+    (control,) = parse_plugin_controls([wire])
+    entry = PluginEntry.from_wire(
+        {
+            "plugin": "tp-contract",
+            "status": "running",
+            "choices": {
+                "control:hue": {
+                    "options": [
+                        {"value": "warm", "label": "Warm", "detail": "Amber"},
+                        {"value": "cool", "label": "Cool"},
+                    ]
+                }
+            },
+            "controls": {"hue": {"value": "cool"}},
+        }
+    )
+    view = control_view(control, entry, "None")
+    assert view.available
+    assert view.options == (("Warm", "warm"), ("Cool", "cool"), ("No tone", None))
+    assert (view.current, view.value) == ("Cool", ControlValue("cool"))
+
+
 async def test_a_control_is_a_select_on_the_workspace_device(
     hass: HomeAssistant,
     server: FakeDriftBeacon,

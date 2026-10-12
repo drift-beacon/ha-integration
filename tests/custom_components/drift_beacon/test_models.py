@@ -47,6 +47,30 @@ def test_snapshot_keeps_one_live_session_and_the_pin() -> None:
     assert state.activity("reading").color == [51, 102, 153]
 
 
+def test_a_renamed_workspace_takes_its_new_name() -> None:
+    """WorkspaceUpdated replaces the Snapshot's name; one that names nothing new changes nothing."""
+    state = _state()
+    renamed = apply_message(
+        state,
+        {
+            "_tag": "WorkspaceUpdated",
+            "workspaceId": state.workspace_id,
+            "workspaceName": "Local Test Space",
+        },
+    )
+    assert renamed.workspace_name == "Local Test Space"
+    assert renamed.workspace_id == state.workspace_id
+    assert renamed.activities is state.activities
+    for message in (
+        {"workspaceId": state.workspace_id, "workspaceName": "Home"},
+        {"workspaceId": "ws-other", "workspaceName": "Office"},
+        {"workspaceId": state.workspace_id, "workspaceName": ""},
+        {"workspaceId": state.workspace_id, "workspaceName": None},
+        {"workspaceId": state.workspace_id},
+    ):
+        assert apply_message(state, {"_tag": "WorkspaceUpdated", **message}) is state
+
+
 def test_session_ended_only_clears_the_session_it_names() -> None:
     """A stale SessionEnded must not clear a newer session."""
     state = _state(liveSessions=[live_session("s2", "reading")])

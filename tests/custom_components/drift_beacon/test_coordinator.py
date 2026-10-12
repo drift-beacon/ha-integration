@@ -34,6 +34,8 @@ from .conftest import (
     device_for,
     entity_id_for,
     live_session,
+    make_entry,
+    make_snapshot,
     schedule_trigger,
     wait_for,
 )
@@ -509,6 +511,111 @@ async def test_rename_and_type_change_update_the_device(
     session = er.async_get(hass).async_get(entity_id_for(hass, "switch", session_uid))
     assert session.entity_id == "switch.hydration_session"
     assert session.hidden_by is not None
+
+
+def _renamed(name: str, workspace_id: str = WORKSPACE_ID) -> dict[str, Any]:
+    return {
+        "_tag": "WorkspaceUpdated",
+        "workspaceId": workspace_id,
+        "workspaceName": name,
+    }
+
+
+async def test_a_renamed_workspace_renames_its_device_and_the_entry_at_once(
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    server: FakeDriftBeacon,
+) -> None:
+    """The names follow the workspace while connected; what automations refer to stays."""
+    workspace = device_for(hass, WORKSPACE_ID)
+    user_sensor = entity_id_for(hass, "sensor", f"{WORKSPACE_ID}:connected_user")
+    assert (workspace.name, setup_integration.title) == ("Home", "Home")
+    assert user_sensor is not None
+    coordinator = setup_integration.runtime_data
+
+    await server.push(_renamed("Local Test Space"))
+    await wait_for(lambda: setup_integration.title == "Local Test Space")
+    renamed = device_for(hass, WORKSPACE_ID)
+    assert renamed.name == "Local Test Space"
+    assert renamed.id == workspace.id
+    assert (
+        entity_id_for(hass, "sensor", f"{WORKSPACE_ID}:connected_user") == user_sensor
+    )
+    assert coordinator.data.workspace_name == "Local Test Space"
+    # No reload, and no new connection: the entry only got a title.
+    assert setup_integration.runtime_data is coordinator
+    assert server.connections == 1
+
+    # Another workspace's rename is not this entry's.
+    await server.push(
+        _renamed("Office", "ws-other"),
+        {"_tag": "ActivityUpdated", "activity": activity("reading", "Books")},
+    )
+    await wait_for(
+        lambda: device_for(hass, f"{WORKSPACE_ID}:activity:reading").name == "Books"
+    )
+    assert setup_integration.title == "Local Test Space"
+
+
+async def test_a_workspace_renamed_while_disconnected_is_renamed_by_the_snapshot(
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    server: FakeDriftBeacon,
+) -> None:
+    """A reconnect's Snapshot carries the name, from a server of any age."""
+    server.snapshot = make_snapshot(workspaceName="Local Test Space")
+    await server.disconnect()
+    await wait_for(lambda: setup_integration.title == "Local Test Space")
+    assert device_for(hass, WORKSPACE_ID).name == "Local Test Space"
+
+
+async def test_an_entry_titled_before_a_rename_takes_the_name_at_setup(
+    hass: HomeAssistant,
+    server: FakeDriftBeacon,
+) -> None:
+    """An entry added as "My Workspace" is renamed by its first Snapshot."""
+    entry = make_entry(server, title="My Workspace")
+    entry.add_to_hass(hass)
+    server.snapshot = make_snapshot(workspaceName="Local Test Space")
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.title == "Local Test Space"
+    assert device_for(hass, WORKSPACE_ID).name == "Local Test Space"
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_a_title_given_in_home_assistant_stays_until_the_workspace_is_renamed(
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    server: FakeDriftBeacon,
+) -> None:
+    """An update of anything else leaves the user's title; a rename or a Snapshot replaces it."""
+    hass.config_entries.async_update_entry(setup_integration, title="Kitchen tablet")
+    await server.push(
+        {"_tag": "ActivityUpdated", "activity": activity("reading", "Books")}
+    )
+    await wait_for(
+        lambda: device_for(hass, f"{WORKSPACE_ID}:activity:reading").name == "Books"
+    )
+    assert setup_integration.title == "Kitchen tablet"
+
+    await server.push(_renamed("Local Test Space"))
+    await wait_for(lambda: setup_integration.title == "Local Test Space")
+
+
+async def test_a_workspace_the_server_names_by_its_id_keeps_the_entry_title(
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    server: FakeDriftBeacon,
+) -> None:
+    """A server that knows no name sends the id in its place: that is no title."""
+    server.snapshot = make_snapshot(workspaceName=WORKSPACE_ID)
+    await server.disconnect()
+    await wait_for(
+        lambda: setup_integration.runtime_data.data.workspace_name == WORKSPACE_ID
+    )
+    assert setup_integration.title == "Home"
 
 
 async def test_deleted_activity_loses_its_device_and_gets_it_back(

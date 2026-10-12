@@ -129,7 +129,7 @@ def field_selector(schema: Mapping[str, Any]) -> dict[str, Any]:
         number: dict[str, Any] = {}
         # A duration is a number of milliseconds here, not Home Assistant's duration
         # selector, which has no bounds: this keeps the field's own, and its slider.
-        if schema.get("format") == "duration-ms":
+        if schema.get("format") == "duration":
             number["unit_of_measurement"] = "ms"
         if low is not None:
             number["min"] = low

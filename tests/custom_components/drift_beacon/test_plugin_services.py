@@ -227,11 +227,11 @@ def test_options_and_formats_get_selectors_that_say_more() -> None:
                 "tint": {"type": ["string", "null"], "format": "color"},
                 "wait": {
                     "type": "integer",
-                    "format": "duration-ms",
+                    "format": "duration",
                     "minimum": 0,
                     "maximum": 60000,
                 },
-                "pause": {"type": ["integer", "null"], "format": "duration-ms"},
+                "pause": {"type": ["integer", "null"], "format": "duration"},
                 "odd": {"type": "string", "options": "round"},
             },
         }
@@ -298,7 +298,7 @@ def test_a_default_is_given_as_its_selector_holds_it() -> None:
                     "options": [{"value": "round", "label": "Round"}],
                 },
                 "tint": {"type": "string", "format": "color", "default": "#FFcc00"},
-                "wait": {"type": "integer", "format": "duration-ms", "default": 1500},
+                "wait": {"type": "integer", "format": "duration", "default": 1500},
                 "note": {"type": "string", "default": "#ffcc00"},
             },
         }
@@ -386,7 +386,7 @@ def test_what_a_selector_holds_is_sent_as_the_field_takes_it(
                         "options": [{"value": 0.5, "label": "Half"}],
                     },
                     "tint": {"type": "string", "format": "color"},
-                    "wait": {"type": "integer", "format": "duration-ms"},
+                    "wait": {"type": "integer", "format": "duration"},
                     "tags": {"type": "array", "items": {"type": "integer"}},
                 },
             },

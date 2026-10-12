@@ -23,9 +23,9 @@ plugin). Add `-k <name>` to select tests, or a file path to run one module.
 | File | Covers |
 | --- | --- |
 | `conftest.py` | `FakeDriftBeacon` server (plugin commands, plugin controls and their values, schedule events only for subscribers that ask, answers that come late or never), config entry and setup fixtures (`make_entry` for more workspaces), `wait_for` |
-| `test_models.py` | State reducer, marks and schedule triggers carried for the coordinator, colour parsing |
+| `test_models.py` | State reducer, a renamed workspace, marks and schedule triggers carried for the coordinator, colour parsing |
 | `test_init.py` | Setup errors, device model, hidden entities, unload, legacy entries, device deletion |
-| `test_coordinator.py` | Events, focus, schedule events (once per occurrence, none from a reconnect), reconnect diffs, grace period, malformed input, device rename/type change/removal |
+| `test_coordinator.py` | Events, focus, schedule events (once per occurrence, none from a reconnect), reconnect diffs, grace period, malformed input, device rename/type change/removal, a renamed workspace (its device and the entry's title, while connected, from a reconnect's Snapshot and at setup; a title given in Home Assistant; a workspace named by its id) |
 | `test_entities.py` | Switch, button and sensor state and actions, error propagation, write-on-change |
 | `test_services.py` | Device-target resolution and rejection, per-service RPCs, multi-target failures |
 | `test_plugin_services.py` | Plugin commands as actions: names, fields and selectors, registration from the first chunk, list changes, reconnects, calls, errors, several workspaces, stored lists |

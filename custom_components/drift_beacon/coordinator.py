@@ -359,12 +359,30 @@ class DriftBeaconCoordinator(DataUpdateCoordinator[WorkspaceState]):
         self._async_fire_events(prev, state, marks)
         self._async_fire_schedule_triggers(prev, state, triggers)
         self.devices.async_sync(prev, state, full=full)
+        self._async_sync_title(prev, state, full=full)
         # A chunk without a list (an older server, or one that doesn't know it yet) keeps the last.
         if commands is not None and self.on_plugin_commands is not None:
             try:
                 self.on_plugin_commands(commands)
             except Exception:
                 _LOGGER.exception("Error updating Drift Beacon plugin services")
+
+    @callback
+    def _async_sync_title(
+        self, prev: WorkspaceState | None, state: WorkspaceState, *, full: bool
+    ) -> None:
+        """Name the config entry after the workspace, when the server says its name.
+
+        Only a Snapshot or a rename does: a title the user gave the entry in Home Assistant is
+        not undone by every update of an activity. A server that knows no name sends the
+        workspace's id in its place, which is no title.
+        """
+        name = state.workspace_name
+        if not full and prev is not None and prev.workspace_name == name:
+            return
+        if name in (self.workspace_id, self.config_entry.title):
+            return
+        self.hass.config_entries.async_update_entry(self.config_entry, title=name)
 
     @callback
     def _async_fire_events(

@@ -634,6 +634,17 @@ def apply_message(state: WorkspaceState, msg: dict[str, Any]) -> WorkspaceState:
     Unknown tags are ignored so the server can add messages without breaking older clients.
     """
     match msg.get("_tag"):
+        case "WorkspaceUpdated":
+            # The user renamed the workspace. Its id never changes: one for another is not ours.
+            name = msg.get("workspaceName")
+            if (
+                msg.get("workspaceId") != state.workspace_id
+                or not isinstance(name, str)
+                or not name
+                or name == state.workspace_name
+            ):
+                return state
+            return replace(state, workspace_name=name)
         case "ActivityCreated" | "ActivityUpdated":
             return _with_activity(state, Activity.from_wire(msg["activity"]))
         case "ActivityDeleted":

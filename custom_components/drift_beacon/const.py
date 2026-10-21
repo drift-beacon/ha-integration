@@ -26,6 +26,8 @@ DEFAULT_HOST: Final = "local-drift-beacon"
 DEFAULT_PORT: Final = 9000
 
 # Transport
+INFO_PATH: Final = "/api/info"
+# Hubs from before /api/info answer only this; detection falls back to it.
 STATUS_PATH: Final = "/api/device/status"
 WS_PATH: Final = "/api/ws"
 REQUEST_TIMEOUT: Final = 10  # seconds, per RPC and per handshake

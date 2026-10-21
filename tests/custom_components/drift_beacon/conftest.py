@@ -114,6 +114,8 @@ class FakeDriftBeacon:
         """Start with the default snapshot."""
         self.snapshot = make_snapshot()
         self.handshake_status: int | None = None
+        # A hub from before /api/info: it answers only the device status document.
+        self.legacy_status_only = False
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.results: dict[str, Any | Callable[[dict[str, Any]], Any]] = {
             "GetConnectionInfo": lambda _: {
@@ -144,6 +146,7 @@ class FakeDriftBeacon:
         """Listen on a free local port."""
         app = web.Application()
         app.router.add_get("/api/ws", self._ws)
+        app.router.add_get("/api/info", self._info)
         app.router.add_get("/api/device/status", self._status)
         self._runner = web.AppRunner(app)
         await self._runner.setup()
@@ -159,7 +162,22 @@ class FakeDriftBeacon:
         if self._runner:
             await self._runner.cleanup()
 
+    async def _info(self, request: web.Request) -> web.Response:
+        if self.legacy_status_only:
+            raise web.HTTPNotFound
+        return web.json_response(
+            {
+                "id": "hub",
+                "name": "Hub",
+                "version": "0.2.51",
+                "protocol": 1,
+                "startup": "ready",
+            }
+        )
+
     async def _status(self, request: web.Request) -> web.Response:
+        if not self.legacy_status_only:
+            raise web.HTTPNotFound
         return web.json_response(
             {"status": "healthy", "device": {"id": "hub", "name": "Hub"}}
         )

@@ -12,7 +12,7 @@ from typing import Any
 import aiohttp
 from homeassistant.helpers.json import json_dumps
 
-from .const import HEARTBEAT_INTERVAL, REQUEST_TIMEOUT, STATUS_PATH, WS_PATH
+from .const import HEARTBEAT_INTERVAL, INFO_PATH, REQUEST_TIMEOUT, STATUS_PATH, WS_PATH
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +66,24 @@ def ws_url(protocol: str, host: str, port: int) -> str:
     return f"{scheme}://{host}:{port}{WS_PATH}"
 
 
+async def _async_get_public_json(
+    session: aiohttp.ClientSession, url: str, *, timeout: float
+) -> Any | None:
+    """GET a public JSON document; None when the server has no such path (404)."""
+    try:
+        async with session.get(
+            url, timeout=aiohttp.ClientTimeout(total=timeout)
+        ) as response:
+            if response.status == 404:
+                return None
+            response.raise_for_status()
+            return await response.json(content_type=None)
+    except aiohttp.ClientConnectorCertificateError as err:
+        raise DriftBeaconSslError(str(err)) from err
+    except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+        raise DriftBeaconConnectionError(str(err)) from err
+
+
 async def async_get_server_status(
     session: aiohttp.ClientSession,
     protocol: str,
@@ -74,22 +92,26 @@ async def async_get_server_status(
     *,
     timeout: float,
 ) -> dict[str, Any]:
-    """Fetch the public device status document used to recognise a Drift Beacon server.
+    """Fetch the public info document used to recognise a Drift Beacon server.
 
-    TLS verification follows ``session`` (``async_get_clientsession(hass, verify_ssl)``).
+    A hub from before ``/api/info`` answers it with 404, and is recognised by its
+    device status document instead. TLS verification follows ``session``
+    (``async_get_clientsession(hass, verify_ssl)``).
     """
-    try:
-        async with session.get(
-            f"{base_url(protocol, host, port)}{STATUS_PATH}",
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as response:
-            response.raise_for_status()
-            data = await response.json(content_type=None)
-    except aiohttp.ClientConnectorCertificateError as err:
-        raise DriftBeaconSslError(str(err)) from err
-    except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-        raise DriftBeaconConnectionError(str(err)) from err
-    if not isinstance(data, dict) or not isinstance(data.get("device"), dict):
+    url = base_url(protocol, host, port)
+    data = await _async_get_public_json(session, f"{url}{INFO_PATH}", timeout=timeout)
+    if data is None:
+        status = await _async_get_public_json(
+            session, f"{url}{STATUS_PATH}", timeout=timeout
+        )
+        if isinstance(status, dict) and isinstance(status.get("device"), dict):
+            return status
+        raise DriftBeaconConnectionError("Not a Drift Beacon server")
+    if (
+        not isinstance(data, dict)
+        or not isinstance(data.get("id"), str)
+        or not isinstance(data.get("name"), str)
+    ):
         raise DriftBeaconConnectionError("Not a Drift Beacon server")
     return data
 

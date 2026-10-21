@@ -50,6 +50,22 @@ async def test_user_flow_creates_a_workspace_entry(
     await hass.config_entries.async_unload(result["result"].entry_id)
 
 
+async def test_user_flow_detects_a_hub_from_before_the_info_document(
+    hass: HomeAssistant, server: FakeDriftBeacon
+) -> None:
+    """A hub that answers only /api/device/status is still recognised."""
+    server.legacy_status_only = True
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _user_input(server)
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_PROTOCOL] == "http"
+    await hass.config_entries.async_unload(result["result"].entry_id)
+
+
 @pytest.mark.parametrize(
     ("status", "error"),
     [(401, "invalid_auth"), (403, "invalid_auth"), (503, "cannot_connect")],

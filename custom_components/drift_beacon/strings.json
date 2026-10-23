@@ -12,7 +12,7 @@
         },
         "data_description": {
           "host": "Hostname or IP address of your Drift Beacon server.",
-          "port": "Port of the Drift Beacon server (default 9000).",
+          "port": "Port of the Drift Beacon server (default 9821).",
           "verify_ssl": "Turn off for the Home Assistant add-on or another server with a self-signed certificate.",
           "api_token": "A workspace access token from the Drift Beacon web app."
         }

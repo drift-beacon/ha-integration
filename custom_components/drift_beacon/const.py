@@ -23,7 +23,7 @@ CONF_USER_ID: Final = "user_id"
 CONF_USER_NAME: Final = "user_name"
 
 DEFAULT_HOST: Final = "local-drift-beacon"
-DEFAULT_PORT: Final = 9000
+DEFAULT_PORT: Final = 9821
 
 # Transport
 INFO_PATH: Final = "/api/info"

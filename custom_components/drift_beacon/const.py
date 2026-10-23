@@ -17,12 +17,16 @@ PLATFORMS: Final = [
 
 # Config entry data
 CONF_API_TOKEN: Final = "api_token"
+# The id of the entry's hub (its /api/info `id`), checked before every connection.
+CONF_HUB_ID: Final = "hub_id"
+# The hub's HTTPS port, for the workspace device's link to the dashboard.
+CONF_HTTPS_PORT: Final = "https_port"
 CONF_PROTOCOL: Final = "protocol"
 CONF_WORKSPACE_ID: Final = "workspace_id"
 CONF_USER_ID: Final = "user_id"
 CONF_USER_NAME: Final = "user_name"
 
-DEFAULT_HOST: Final = "local-drift-beacon"
+# The hub's plain HTTP port, which native clients use.
 DEFAULT_PORT: Final = 9821
 
 # Transport
@@ -42,12 +46,11 @@ STABLE_CONNECTION_TIME: Final = 60  # seconds
 # Keep entities available across short reconnects instead of flapping every blip.
 UNAVAILABLE_GRACE_PERIOD: Final = 30  # seconds
 
-# Local add-on discovery
-DETECTION_CANDIDATES: Final = [
-    ("local-drift-beacon", DEFAULT_PORT),
-    ("homeassistant.local", DEFAULT_PORT),
-    ("localhost", DEFAULT_PORT),
-]
+# Discovery
+# Where the form for adding a hub by hand looks before the user types an address: the Home
+# Assistant app on this machine, which Home Assistant reaches over loopback on any install.
+# Hubs elsewhere on the network are found by zeroconf.
+LOCAL_HUB_ADDRESSES: Final = (("127.0.0.1", DEFAULT_PORT),)
 DETECTION_TIMEOUT: Final = 2  # seconds
 
 # Device models (used by selectors in services.yaml and the blueprints)

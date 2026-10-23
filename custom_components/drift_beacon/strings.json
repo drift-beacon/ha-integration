@@ -1,59 +1,68 @@
 {
   "config": {
+    "flow_title": "{name}",
     "step": {
       "user": {
         "title": "Connect to Drift Beacon",
-        "description": "Enter your Drift Beacon server and an access token. Create a token in the Drift Beacon web app under Settings → Access Tokens; it decides which workspace and user Home Assistant acts for.\n\n{detected}",
+        "description": "Enter your Drift Beacon hub's address and an API key. To get a key, create one under **API Keys** in your workspace's settings in the Drift Beacon dashboard, and paste it here. The key decides which workspace and user Home Assistant acts for.\n\n{detected}",
         "data": {
           "host": "[%key:common::config_flow::data::host%]",
           "port": "[%key:common::config_flow::data::port%]",
           "verify_ssl": "[%key:common::config_flow::data::verify_ssl%]",
-          "api_token": "Access token"
+          "api_token": "API key"
         },
         "data_description": {
-          "host": "Hostname or IP address of your Drift Beacon server.",
-          "port": "Port of the Drift Beacon server (default 9821).",
-          "verify_ssl": "Turn off for the Home Assistant add-on or another server with a self-signed certificate.",
-          "api_token": "A workspace access token from the Drift Beacon web app."
+          "host": "Hostname or IP address of your Drift Beacon hub.",
+          "port": "The hub's HTTP port (9821 unless you changed it).",
+          "verify_ssl": "Only used over HTTPS. Turn off for a hub with a self-signed certificate, which the Home Assistant app has unless you gave it your own.",
+          "api_token": "An API key from your workspace's settings in the Drift Beacon dashboard."
         }
       },
       "reauth_confirm": {
         "title": "Reauthenticate Drift Beacon",
-        "description": "The access token for {workspace} is no longer valid. Enter a new token for the same workspace and user ({user}).",
+        "description": "The API key for {workspace} no longer works. Paste a new key for the same workspace and user ({user}): create one under **API Keys** in your workspace's settings in the Drift Beacon dashboard.",
         "data": {
-          "api_token": "Access token"
+          "api_token": "API key"
         }
       },
       "reconfigure": {
-        "title": "Change Drift Beacon server",
-        "description": "Update where Home Assistant reaches your Drift Beacon server. The access token is kept.",
+        "title": "Change the Drift Beacon hub's address",
+        "description": "Update where Home Assistant reaches your Drift Beacon hub. The API key is kept, and is only sent if the address answers as this entry's hub.",
         "data": {
           "host": "[%key:common::config_flow::data::host%]",
           "port": "[%key:common::config_flow::data::port%]",
           "verify_ssl": "[%key:common::config_flow::data::verify_ssl%]"
         },
         "data_description": {
-          "host": "Hostname or IP address of your Drift Beacon server.",
-          "port": "Port of the Drift Beacon server.",
-          "verify_ssl": "Turn off for the Home Assistant add-on or another server with a self-signed certificate."
+          "host": "Hostname or IP address of your Drift Beacon hub.",
+          "port": "The hub's HTTP port (9821 unless you changed it).",
+          "verify_ssl": "Only used over HTTPS. Turn off for a hub with a self-signed certificate, which the Home Assistant app has unless you gave it your own."
         }
+      },
+      "zeroconf_confirm": {
+        "title": "Set up Drift Beacon",
+        "description": "Home Assistant found the Drift Beacon hub {name} at {host}. Set it up? Next you paste an API key: create one under **API Keys** in your workspace's settings in the Drift Beacon dashboard."
       }
     },
     "error": {
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "The access token was rejected, or it no longer grants access to its workspace.",
-      "invalid_server": "No Drift Beacon server answered at that address and port.",
-      "ssl_verification_failed": "The server's TLS certificate could not be verified. If it uses a self-signed certificate (like the add-on), turn off certificate verification.",
-      "workspace_not_found": "The token's workspace no longer exists on this server.",
-      "wrong_workspace": "This token belongs to a different workspace. Add that workspace as a new entry instead.",
-      "wrong_user": "This token belongs to a different user. Use a token for the same user, or add the workspace again.",
+      "invalid_auth": "The API key was rejected, or it no longer grants access to its workspace.",
+      "invalid_server": "No Drift Beacon hub answered at that address and port.",
+      "ssl_verification_failed": "The hub's TLS certificate could not be verified. If it has a self-signed certificate (the Home Assistant app does unless you gave it your own), turn off certificate verification.",
+      "workspace_not_found": "The API key's workspace no longer exists on this hub.",
+      "wrong_workspace": "This API key belongs to a different workspace. Add that workspace as a new entry instead.",
+      "wrong_user": "This API key belongs to a different user. Use a key for the same user, or add the workspace again.",
+      "wrong_hub": "That address answers as a different Drift Beacon hub from this entry's, so the API key wasn't sent. Give the address of this entry's hub, or add the other hub as a new entry.",
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
       "already_configured": "This workspace is already set up.",
       "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]",
       "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]",
-      "wrong_workspace": "The server at that address has a different workspace for this token."
+      "wrong_workspace": "The hub at that address has a different workspace for this API key.",
+      "already_in_progress": "[%key:common::config_flow::abort::already_in_progress%]",
+      "invalid_discovery": "The hub's announcement on the network was incomplete.",
+      "no_ipv4_address": "The hub was found without an IPv4 address, which this integration needs."
     }
   },
   "device_automation": {
@@ -100,10 +109,13 @@
   },
   "exceptions": {
     "auth_failed": {
-      "message": "The Drift Beacon access token was rejected, or now belongs to a different workspace or user."
+      "message": "The Drift Beacon API key was rejected, or now belongs to a different workspace or user."
     },
     "workspace_not_found": {
       "message": "The Drift Beacon workspace for this entry no longer exists."
+    },
+    "wrong_hub": {
+      "message": "{address} now answers as another Drift Beacon hub ({found}), not the one this entry was set up with ({expected}), so the API key wasn't sent. Home Assistant keeps trying, and follows the hub when it finds it at a new address. You can also give its address with Reconfigure."
     },
     "cannot_connect": {
       "message": "Cannot connect to Drift Beacon: {error}"

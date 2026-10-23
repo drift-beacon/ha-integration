@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -18,6 +19,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.drift_beacon.const import (
     CONF_API_TOKEN,
+    CONF_HUB_ID,
     CONF_PROTOCOL,
     CONF_USER_ID,
     CONF_USER_NAME,
@@ -28,6 +30,7 @@ from custom_components.drift_beacon.const import (
 WORKSPACE_ID = "ws-1"
 USER_ID = "user-1"
 TOKEN = "crt_token"
+HUB_ID = "hub"
 
 
 def activity(
@@ -102,20 +105,99 @@ def make_snapshot(**overrides: Any) -> dict[str, Any]:
     }
 
 
+@dataclass
+class Connection:
+    """A TCP connection the fake hub accepted: how it opened, and the requests it carried."""
+
+    opening: bytes = b""
+    requests: int = 0
+
+    @property
+    def tls_hello(self) -> bool:
+        """It opened with a TLS handshake record (type 22, version 3.x): a ClientHello."""
+        return self.opening[:2] == b"\x16\x03"
+
+
+class _Recording(asyncio.Protocol):
+    """aiohttp's handler for one connection, noting how the connection opened."""
+
+    def __init__(self, handler: asyncio.Protocol, connection: Connection) -> None:
+        self._handler = handler
+        self._connection = connection
+
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        self._handler.connection_made(transport)
+
+    def data_received(self, data: bytes) -> None:
+        if len(self._connection.opening) < 2:
+            self._connection.opening += data[: 2 - len(self._connection.opening)]
+        self._handler.data_received(data)
+
+    def eof_received(self) -> bool | None:
+        return self._handler.eof_received()
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        self._handler.connection_lost(exc)
+
+    def pause_writing(self) -> None:
+        self._handler.pause_writing()
+
+    def resume_writing(self) -> None:
+        self._handler.resume_writing()
+
+
+class _RecordingSite(web.BaseSite):
+    """A site on a free port of 127.0.0.1 that records every connection it accepts."""
+
+    def __init__(self, runner: web.BaseRunner, fake: FakeDriftBeacon) -> None:
+        super().__init__(runner)
+        self._fake = fake
+
+    @property
+    def name(self) -> str:
+        return "fake Drift Beacon hub"
+
+    @property
+    def port(self) -> int:
+        assert self._server is not None
+        return self._server.sockets[0].getsockname()[1]
+
+    async def start(self) -> None:
+        await super().start()
+        server = self._runner.server
+        assert server is not None
+        self._server = await asyncio.get_running_loop().create_server(
+            lambda: self._fake._accept(server()), "127.0.0.1", 0
+        )
+
+
 class FakeDriftBeacon:
     """An aiohttp server on 127.0.0.1 implementing the integration endpoint.
 
     RPCs are recorded in ``calls``; ``results`` and ``errors`` script their replies, and
     ``push`` sends a chunk to every subscriber. As on the server, a ``ScheduleTriggered``
     reaches only the subscribers that asked for schedule events.
+
+    Every TCP connection it accepts is recorded in ``accepted``, so a test can see what
+    reached its plain HTTP port, not only what the integration meant to send: ``tls_hellos``
+    counts the TLS handshakes that reached it, and ``unhandled`` the connections that carried
+    no request it could read.
     """
 
     def __init__(self) -> None:
         """Start with the default snapshot."""
         self.snapshot = make_snapshot()
         self.handshake_status: int | None = None
+        # The id /api/info gives, and what else it says (ports, addresses).
+        self.hub_id = HUB_ID
+        self.info: dict[str, Any] = {}
+        self.info_requests = 0
+        # Seconds /api/info takes to answer.
+        self.info_delay = 0.0
         # A hub from before /api/info: it answers only the device status document.
         self.legacy_status_only = False
+        # Another server at the port: it answers neither document.
+        self.not_a_hub = False
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.results: dict[str, Any | Callable[[dict[str, Any]], Any]] = {
             "GetConnectionInfo": lambda _: {
@@ -139,20 +221,47 @@ class FakeDriftBeacon:
         self._replies: set[asyncio.Task[None]] = set()
         self.connections = 0
         self.handshakes = 0
+        self.accepted: list[Connection] = []
+        self._connection_of: dict[asyncio.Protocol, Connection] = {}
         self._runner: web.AppRunner | None = None
         self.port = 0
 
+    @property
+    def tls_hellos(self) -> int:
+        """How many connections opened with a TLS ClientHello."""
+        return sum(connection.tls_hello for connection in self.accepted)
+
+    @property
+    def unhandled(self) -> int:
+        """How many accepted connections carried no request the server could read."""
+        return sum(connection.requests == 0 for connection in self.accepted)
+
     async def start(self) -> None:
         """Listen on a free local port."""
-        app = web.Application()
+        app = web.Application(middlewares=[self._count_request])
         app.router.add_get("/api/ws", self._ws)
         app.router.add_get("/api/info", self._info)
         app.router.add_get("/api/device/status", self._status)
         self._runner = web.AppRunner(app)
         await self._runner.setup()
-        site = web.TCPSite(self._runner, "127.0.0.1", 0)
+        site = _RecordingSite(self._runner, self)
         await site.start()
-        self.port = site._server.sockets[0].getsockname()[1]
+        self.port = site.port
+
+    def _accept(self, handler: asyncio.Protocol) -> asyncio.Protocol:
+        connection = Connection()
+        self.accepted.append(connection)
+        self._connection_of[handler] = connection
+        return _Recording(handler, connection)
+
+    @web.middleware
+    async def _count_request(
+        self,
+        request: web.Request,
+        handler: Callable[[web.Request], Awaitable[web.StreamResponse]],
+    ) -> web.StreamResponse:
+        self._connection_of[request.protocol].requests += 1
+        return await handler(request)
 
     async def stop(self) -> None:
         """Close every socket and stop listening."""
@@ -163,15 +272,19 @@ class FakeDriftBeacon:
             await self._runner.cleanup()
 
     async def _info(self, request: web.Request) -> web.Response:
-        if self.legacy_status_only:
+        self.info_requests += 1
+        if self.info_delay:
+            await asyncio.sleep(self.info_delay)
+        if self.legacy_status_only or self.not_a_hub:
             raise web.HTTPNotFound
         return web.json_response(
             {
-                "id": "hub",
+                "id": self.hub_id,
                 "name": "Hub",
                 "version": "0.2.51",
                 "protocol": 1,
                 "startup": "ready",
+                **self.info,
             }
         )
 
@@ -372,10 +485,10 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
 
 
 @pytest.fixture(autouse=True)
-def no_local_addon_detection(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep the config flow from probing hostnames outside the sandbox."""
+def no_local_hub_detection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the config flow from probing this machine's own hub port."""
     monkeypatch.setattr(
-        "custom_components.drift_beacon.config_flow.DETECTION_CANDIDATES", []
+        "custom_components.drift_beacon.config_flow.LOCAL_HUB_ADDRESSES", ()
     )
 
 
@@ -397,24 +510,29 @@ async def server(socket_enabled: None) -> AsyncGenerator[FakeDriftBeacon]:
 
 
 def make_entry(
-    server: FakeDriftBeacon, workspace_id: str = WORKSPACE_ID, title: str = "Home"
+    server: FakeDriftBeacon,
+    workspace_id: str = WORKSPACE_ID,
+    title: str = "Home",
+    hub_id: str | None = HUB_ID,
 ) -> MockConfigEntry:
-    """A config entry for ``workspace_id`` on ``server`` (its snapshot must name it)."""
+    """A config entry for ``workspace_id`` on ``server`` (its snapshot must name it).
+
+    ``hub_id`` None makes an entry from before hub ids.
+    """
+    data: dict[str, Any] = {
+        CONF_HOST: "127.0.0.1",
+        CONF_PORT: server.port,
+        CONF_PROTOCOL: "http",
+        CONF_VERIFY_SSL: True,
+        CONF_API_TOKEN: TOKEN,
+        CONF_WORKSPACE_ID: workspace_id,
+        CONF_USER_ID: USER_ID,
+        CONF_USER_NAME: "Rich",
+    }
+    if hub_id is not None:
+        data[CONF_HUB_ID] = hub_id
     return MockConfigEntry(
-        domain=DOMAIN,
-        version=4,
-        title=title,
-        unique_id=workspace_id,
-        data={
-            CONF_HOST: "127.0.0.1",
-            CONF_PORT: server.port,
-            CONF_PROTOCOL: "http",
-            CONF_VERIFY_SSL: True,
-            CONF_API_TOKEN: TOKEN,
-            CONF_WORKSPACE_ID: workspace_id,
-            CONF_USER_ID: USER_ID,
-            CONF_USER_NAME: "Rich",
-        },
+        domain=DOMAIN, version=4, title=title, unique_id=workspace_id, data=data
     )
 
 

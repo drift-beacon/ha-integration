@@ -1,14 +1,33 @@
 # Drift Beacon integration
 
 Connects Home Assistant to one Drift Beacon workspace, acting for the user who owns the
-access token. Requires Home Assistant 2026.9 or later and a Drift Beacon server ([drift-beacon/ha-app](https://github.com/drift-beacon/ha-app))
+API key. Requires Home Assistant 2026.9 or later and a Drift Beacon server ([drift-beacon/ha-app](https://github.com/drift-beacon/ha-app))
 
 ## Install
 
 - **HACS:** add `https://github.com/drift-beacon/ha-integration` as a custom repository (category _Integration_), download **Drift Beacon**, and restart Home Assistant.
 - **By hand:** copy `custom_components/drift_beacon` into your Home Assistant `config/custom_components/` and restart.
 
-Then add it under Settings → Devices & services, with the hub's address and an access token.
+Then add it under Settings → Devices & services. You need an API key: in the Drift Beacon
+dashboard, create one under **API Keys** in your workspace's settings. The key decides which
+workspace and user Home Assistant acts for, so add each workspace with its own key.
+
+### Discovery
+
+Home Assistant finds Drift Beacon hubs on your network by zeroconf: the Home Assistant app and
+the standalone container announce themselves, and a desktop hub does when its advertising is
+turned on. A hub it finds shows under Settings → Devices & services → **Discovered**. Confirm
+it, then paste an API key; the announcement carries no credential.
+
+- **Install first, then restart.** Home Assistant only listens for Drift Beacon hubs once the
+  integration is installed and Home Assistant has restarted, so no card appears before that.
+- **A hub you have already added shows no card.** Its entries follow it instead (below).
+  To add another workspace on the same hub, use **Add entry** on the integration.
+- A hub with no IPv4 address is not offered. Add it by hand.
+
+Added by hand, the form fills in the Home Assistant app on this machine (`127.0.0.1`, port
+9821) when it answers there. Otherwise type the hub's address: its IP address always works,
+and the HTTP port is 9821 unless you changed it.
 
 ## Devices
 
@@ -209,6 +228,28 @@ actions may run.
 ## Connection
 
 The config flow detects `https` or `http`, and verifies TLS certificates unless you turn
-**Verify SSL certificate** off (needed for the add-on's self-signed certificate). Change the
-address later with **Reconfigure**. If the token stops working, Home Assistant asks for a new
-one for the same workspace and user.
+**Verify SSL certificate** off (needed for a self-signed certificate, which the Home Assistant
+app has unless you gave it your own). Discovered hubs are reached over plain HTTP. Change the
+address later with **Reconfigure**. If the API key stops working, Home Assistant asks for a
+new one for the same workspace and user.
+
+The workspace device's **Visit** link opens the hub's dashboard at its own HTTPS address
+(`https://driftbeacon.local:9820` on a hub that claimed that name), never at a loopback
+address that only the Home Assistant machine can open.
+
+### The hub's id
+
+Each entry remembers the id of the hub it was set up with.
+
+- **The entry follows its hub.** When Home Assistant discovers that hub at a new address or
+  port, every entry with its id moves there and reconnects, with no card. Entries stay, and
+  show as unavailable, while the hub is gone, for example after the app is uninstalled.
+  Hubs reached through a proxy or an HTTPS address are never moved by discovery: that address
+  is your choice, and the entry reconnects there by itself.
+- **The API key only goes to that hub.** Before connecting, at setup and after every dropped
+  connection, the integration asks the address which hub it is. If another hub answers
+  (another machine took the address, say), it sends nothing: the entry shows as not ready,
+  retrying, with a log warning that the address now answers as another hub. It reconnects by
+  itself once discovery finds the hub at its new address, or give that address with
+  **Reconfigure**, which also only sends the key to the same hub.
+- **Entries from before hub ids** learn their hub's id the first time they connect.

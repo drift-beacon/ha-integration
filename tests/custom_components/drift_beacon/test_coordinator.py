@@ -6,6 +6,7 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
@@ -421,6 +422,29 @@ async def test_a_malformed_schedule_trigger_costs_only_itself(
     await server.push(_triggered("evening", "reading"))
     await wait_for(lambda: len(events[EVENT_SCHEDULE_TRIGGERED]) == 2)
     assert _occurrences(events) == ["morning:2026-09-24", "evening:2026-09-24"]
+
+
+async def test_a_reconnect_to_an_address_that_now_answers_as_another_hub(
+    hass: HomeAssistant,
+    setup_integration: MockConfigEntry,
+    server: FakeDriftBeacon,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The key isn't sent: the entry is set up again, so it shows as not ready, and says why."""
+    server.hub_id = "another-hub"
+    handshakes = server.handshakes
+    await server.disconnect()
+    await wait_for(lambda: setup_integration.state is ConfigEntryState.SETUP_RETRY, 5)
+    await hass.async_block_till_done()
+    assert server.handshakes == handshakes
+    said = "now answers as another Drift Beacon hub (another-hub)"
+    assert said in (setup_integration.reason or "")
+    # Once, not again by the setup that follows.
+    warnings = [
+        r for r in caplog.records if r.levelname == "WARNING" and said in r.getMessage()
+    ]
+    assert len(warnings) == 1
+    assert hass.states.get("switch.reading_pin").state == "unavailable"
 
 
 async def test_short_disconnects_do_not_flap_entities(

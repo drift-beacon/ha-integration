@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -11,6 +12,7 @@ from typing import Any
 
 import aiohttp
 from homeassistant.helpers.json import json_dumps
+from yarl import URL
 
 from .const import HEARTBEAT_INTERVAL, INFO_PATH, REQUEST_TIMEOUT, STATUS_PATH, WS_PATH
 
@@ -42,6 +44,25 @@ class DriftBeaconAuthError(DriftBeaconError):
 
 class DriftBeaconWorkspaceNotFoundError(DriftBeaconError):
     """The token's workspace no longer exists on the server (404)."""
+
+
+class DriftBeaconHubMismatchError(DriftBeaconError):
+    """The address answers as another hub than the one the entry was set up with."""
+
+    def __init__(self, address: str, expected: str, found: str | None) -> None:
+        """Name the address and both hubs; ``found`` is None for a hub that gives no id."""
+        self.address = address
+        self.expected = expected
+        self.found = found
+        super().__init__(
+            f"{address} now answers as another Drift Beacon hub ({self.found_text}), "
+            f"not the one this entry was set up with ({expected})"
+        )
+
+    @property
+    def found_text(self) -> str:
+        """The hub that answered, for a message."""
+        return self.found or "one that gives no id"
 
 
 class DriftBeaconRpcError(DriftBeaconError):
@@ -107,13 +128,95 @@ async def async_get_server_status(
         if isinstance(status, dict) and isinstance(status.get("device"), dict):
             return status
         raise DriftBeaconConnectionError("Not a Drift Beacon server")
+    _require_info(data)
+    return data
+
+
+def _require_info(data: Any) -> None:
     if (
         not isinstance(data, dict)
         or not isinstance(data.get("id"), str)
         or not isinstance(data.get("name"), str)
     ):
         raise DriftBeaconConnectionError("Not a Drift Beacon server")
+
+
+def hub_id_of(document: dict[str, Any]) -> str | None:
+    """The hub's id from what :func:`async_get_server_status` returned.
+
+    None for a hub from before ``/api/info``: its device status document gives no hub id.
+    """
+    hub_id = document.get("id")
+    return hub_id if isinstance(hub_id, str) and hub_id else None
+
+
+async def async_verify_hub(
+    session: aiohttp.ClientSession,
+    protocol: str,
+    host: str,
+    port: int,
+    hub_id: str | None,
+    *,
+    timeout: float = REQUEST_TIMEOUT,
+) -> dict[str, Any] | None:
+    """Ask the address which hub it is, before anything carrying the API key goes there.
+
+    Returns the info document, or None from a hub from before it. With ``hub_id``, raises
+    :class:`DriftBeaconHubMismatchError` unless the document names that hub; without one (an
+    entry from before hub ids) nothing is compared.
+    """
+    data = await _async_get_public_json(
+        session, f"{base_url(protocol, host, port)}{INFO_PATH}", timeout=timeout
+    )
+    if data is not None:
+        _require_info(data)
+    found = None if data is None else hub_id_of(data)
+    if hub_id is not None and found != hub_id:
+        raise DriftBeaconHubMismatchError(f"{host}:{port}", hub_id, found)
     return data
+
+
+def hub_https_port(info: dict[str, Any] | None) -> int | None:
+    """The HTTPS port from an info document's ``ports``, if it gives one."""
+    ports = info.get("ports") if info else None
+    https = ports.get("https") if isinstance(ports, dict) else None
+    return https if isinstance(https, int) and not isinstance(https, bool) else None
+
+
+def _is_loopback(host: str) -> bool:
+    host = host.strip("[]").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def configuration_url(
+    host: str, https_port: int | None, info: dict[str, Any] | None
+) -> str | None:
+    """The dashboard's address for the workspace device's link: public, never loopback.
+
+    The hub's own ``httpsUrl`` comes first: it is the canonical origin (its claimed name, else
+    its LAN address), and every other origin keeps its own copy of the data and its own
+    sign-in. Without it, the entry's host on the HTTPS port; None when that host is loopback
+    (the Home Assistant app reached on this machine) or the port is unknown.
+    """
+    https_url = info.get("httpsUrl") if info else None
+    if isinstance(https_url, str):
+        try:
+            url_host = URL(https_url).host
+        except ValueError:
+            url_host = None
+        if url_host and not _is_loopback(url_host):
+            return https_url
+    port = hub_https_port(info) or https_port
+    if port is None or _is_loopback(host):
+        return None
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    return f"https://{host}:{port}"
 
 
 def _rpc_failure(method: str, error: Any) -> DriftBeaconRpcError:

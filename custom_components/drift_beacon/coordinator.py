@@ -25,17 +25,25 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util.hass_dict import HassKey
 
 from .api import (
     DriftBeaconAuthError,
     DriftBeaconClient,
     DriftBeaconError,
+    DriftBeaconHubMismatchError,
     DriftBeaconNoAnswerError,
     DriftBeaconRpcError,
     DriftBeaconWorkspaceNotFoundError,
+    async_verify_hub,
+    configuration_url,
+    hub_https_port,
+    hub_id_of,
 )
 from .const import (
     CONF_API_TOKEN,
+    CONF_HTTPS_PORT,
+    CONF_HUB_ID,
     CONF_PROTOCOL,
     CONF_USER_ID,
     CONF_WORKSPACE_ID,
@@ -62,6 +70,10 @@ ISSUE_WORKSPACE_NOT_FOUND = "workspace_not_found"
 
 # How many schedule occurrences are remembered, to announce one the server repeats only once.
 REMEMBERED_OCCURRENCES = 256
+
+# Entries whose address answers as another hub, already logged as a warning: once until the
+# entry connects again, not at every retry of its setup (each setup makes a new coordinator).
+MISMATCH_WARNED: HassKey[set[str]] = HassKey(f"{DOMAIN}_hub_mismatch_warned")
 
 # Plugin command failures that are the call's fault, or mean the plugin can't take it here.
 REJECTED_CODES = frozenset(
@@ -135,6 +147,18 @@ class DriftBeaconCoordinator(DataUpdateCoordinator[WorkspaceState]):
             raise ConfigEntryNotReady(
                 translation_domain=DOMAIN, translation_key="workspace_not_found"
             ) from err
+        except DriftBeaconHubMismatchError as err:
+            # Not sent the API key. Retrying follows the hub when discovery finds it elsewhere.
+            self._async_log_mismatch(err)
+            raise ConfigEntryNotReady(
+                translation_domain=DOMAIN,
+                translation_key="wrong_hub",
+                translation_placeholders={
+                    "address": err.address,
+                    "found": err.found_text,
+                    "expected": err.expected,
+                },
+            ) from err
         except (DriftBeaconError, TimeoutError) as err:
             raise ConfigEntryNotReady(
                 translation_domain=DOMAIN,
@@ -176,8 +200,65 @@ class DriftBeaconCoordinator(DataUpdateCoordinator[WorkspaceState]):
             api_token=data[CONF_API_TOKEN],
         )
 
+    async def _async_check_hub(self) -> dict[str, Any] | None:
+        """Ask the entry's address which hub it is; raise unless it's the entry's own.
+
+        Runs before every socket, at setup and at every reconnect: the API key only goes to the
+        hub the entry was set up with. Returns the hub's info document (None from a hub from
+        before it).
+        """
+        data = self.config_entry.data
+        return await async_verify_hub(
+            async_get_clientsession(self.hass, verify_ssl=data[CONF_VERIFY_SSL]),
+            data[CONF_PROTOCOL],
+            data[CONF_HOST],
+            data[CONF_PORT],
+            data.get(CONF_HUB_ID),
+        )
+
+    @callback
+    def _async_log_mismatch(self, err: DriftBeaconHubMismatchError) -> None:
+        warned = self.hass.data.setdefault(MISMATCH_WARNED, set())
+        entry_id = self.config_entry.entry_id
+        _LOGGER.log(
+            logging.DEBUG if entry_id in warned else logging.WARNING,
+            "Drift Beacon %s: %s; the API key was not sent",
+            self.config_entry.title,
+            err,
+        )
+        warned.add(entry_id)
+
+    @callback
+    def _async_remember_hub(self, info: dict[str, Any] | None) -> None:
+        """Keep the hub's id and HTTPS port in the entry, once a connection has proved them.
+
+        An entry from before hub ids gets its hub's id the first time it connects.
+        """
+        if info is None:
+            return
+        data = self.config_entry.data
+        updates: dict[str, Any] = {}
+        if CONF_HUB_ID not in data and (hub_id := hub_id_of(info)) is not None:
+            updates[CONF_HUB_ID] = hub_id
+        if (https_port := hub_https_port(info)) is not None and data.get(
+            CONF_HTTPS_PORT
+        ) != https_port:
+            updates[CONF_HTTPS_PORT] = https_port
+        if updates:
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data={**data, **updates}
+            )
+
     async def _async_open(self) -> None:
-        """Connect, subscribe and apply the chunk carrying the Snapshot."""
+        """Check the hub, then connect, subscribe and apply the chunk carrying the Snapshot."""
+        info = await self._async_check_hub()
+        if self.devices.workspace_device_id is None:
+            # Activity devices link to the workspace device's id, so it must exist first.
+            data = self.config_entry.data
+            self.devices.async_register_workspace(
+                self.config_entry.title,
+                configuration_url(data[CONF_HOST], data.get(CONF_HTTPS_PORT), info),
+            )
         client = self._new_client()
         try:
             await client.connect()
@@ -193,6 +274,8 @@ class DriftBeaconCoordinator(DataUpdateCoordinator[WorkspaceState]):
             await client.close()
             raise
         self._client, self._stream = client, stream
+        self._async_remember_hub(info)
+        self.hass.data.get(MISMATCH_WARNED, set()).discard(self.config_entry.entry_id)
         ir.async_delete_issue(self.hass, DOMAIN, self._issue_id)
         self._apply_chunk(first)
 
@@ -250,6 +333,14 @@ class DriftBeaconCoordinator(DataUpdateCoordinator[WorkspaceState]):
             except DriftBeaconWorkspaceNotFoundError:
                 self._async_create_workspace_issue()
                 await asyncio.sleep(WORKSPACE_MISSING_RETRY_DELAY)
+            except DriftBeaconHubMismatchError as err:
+                # Set up again, so the entry shows as not ready and says why.
+                self._async_log_mismatch(err)
+                self._async_mark_unavailable()
+                self.hass.config_entries.async_schedule_reload(
+                    self.config_entry.entry_id
+                )
+                return
             except (DriftBeaconError, TimeoutError) as err:
                 log = _LOGGER.warning if attempt == 1 else _LOGGER.debug
                 log("Cannot reconnect to Drift Beacon (attempt %d): %s", attempt, err)

@@ -36,8 +36,13 @@ class DeviceManager:
         self.workspace_device_id: str | None = None
 
     @callback
-    def async_register_workspace(self, name: str, configuration_url: str) -> None:
-        """Create or refresh the workspace device; activity devices link to its id."""
+    def async_register_workspace(
+        self, name: str, configuration_url: str | None
+    ) -> None:
+        """Create or refresh the workspace device; activity devices link to its id.
+
+        ``configuration_url`` None clears the link (one from before, to a loopback address).
+        """
         device = dr.async_get(self._hass).async_get_or_create(
             config_entry_id=self._entry.entry_id,
             identifiers={self.workspace_identifier},

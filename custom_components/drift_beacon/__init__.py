@@ -10,7 +10,6 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigEntryState,
 )
-from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
@@ -18,8 +17,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.typing import ConfigType
 
-from .api import base_url
-from .const import CONF_PROTOCOL, DOMAIN, PLATFORMS
+from .const import DOMAIN, PLATFORMS
 from .coordinator import (
     DriftBeaconConfigEntry,
     DriftBeaconCoordinator,
@@ -75,13 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DriftBeaconConfigEntry) 
     coordinator.on_plugin_commands = partial(
         hass.data[PLUGIN_SERVICES].async_set, entry.entry_id
     )
-    # Activity devices link to the workspace device's id, so it must exist first.
-    coordinator.devices.async_register_workspace(
-        entry.title,
-        base_url(
-            entry.data[CONF_PROTOCOL], entry.data[CONF_HOST], entry.data[CONF_PORT]
-        ),
-    )
+    # Checks the hub, then registers the workspace device before its activities' devices.
     await coordinator.async_start()
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
